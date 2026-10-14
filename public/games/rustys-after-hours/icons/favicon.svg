@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs><filter id="g" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.6"/></filter></defs>
+  <rect width="64" height="64" rx="14" fill="#0b0712"/>
+  <polygon points="13,31 12,11 25,21" fill="#8c8074"/><polygon points="51,31 52,11 39,21" fill="#8c8074"/>
+  <circle cx="32" cy="36" r="23" fill="#8c8074"/>
+  <ellipse cx="32" cy="32" rx="22.5" ry="7.5" fill="#12100e"/>
+  <ellipse cx="32" cy="48" rx="9" ry="6.5" fill="#c8beaf"/>
+  <g fill="#ff281e"><circle cx="21.5" cy="30.5" r="6" filter="url(#g)"/><circle cx="42.5" cy="30.5" r="6" filter="url(#g)"/><circle cx="21.5" cy="30.5" r="4"/><circle cx="42.5" cy="30.5" r="4"/></g>
+</svg>

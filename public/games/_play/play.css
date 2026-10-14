@@ -1,0 +1,112 @@
+/* JoyNot Play engine: full-screen canvas games with a light HUD. */
+body.playgame { margin: 0; overflow: hidden; background: #0e1424; touch-action: none; -webkit-user-select: none; user-select: none; overscroll-behavior: none; }
+body.playgame::before { display: none; }
+body.playgame #app { position: fixed; inset: 0; }
+#pg-canvas { position: absolute; inset: 0; display: block; touch-action: none; }
+.hidden { display: none !important; }
+
+/* HUD */
+#pg-hud { position: absolute; left: 0; right: 0; top: 0; padding: calc(8px + env(safe-area-inset-top)) calc(10px + env(safe-area-inset-right)) 0 calc(10px + env(safe-area-inset-left)); display: grid; grid-template-columns: auto auto 1fr auto; gap: 8px; align-items: center; pointer-events: none; z-index: 5; }
+#pg-hud > * { pointer-events: auto; }
+.pg-round { width: 44px; height: 44px; border-radius: 50%; border: 0; background: rgba(14, 20, 36, .7); color: #fff; font-size: 18px; box-shadow: 0 3px 0 rgba(0, 0, 0, .3); }
+.pg-hearts { display: flex; gap: 2px; font-size: 22px; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .4)); }
+.pg-hearts .lost { filter: grayscale(1); opacity: .35; }
+.pg-goal { justify-self: center; max-width: min(640px, 100%); background: rgba(255, 255, 255, .94); color: #2b2350; border-radius: 16px; padding: 7px 14px; font: 700 clamp(14px, 3.6vw, 19px)/1.25 Fredoka, system-ui, sans-serif; text-align: center; box-shadow: 0 4px 0 rgba(0, 0, 0, .2); }
+.pg-goal:empty { display: none; }
+.pg-goal b { color: #d9480f; }
+.pg-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.pg-level, .pg-score { background: rgba(14, 20, 36, .72); color: #fff; border-radius: 99px; padding: 4px 10px; font: 600 13px Fredoka, sans-serif; white-space: nowrap; max-width: 40vw; overflow: hidden; text-overflow: ellipsis; }
+.pg-score:empty { display: none; }
+.pg-prog { grid-column: 1 / -1; height: 8px; border-radius: 99px; background: rgba(255, 255, 255, .25); overflow: hidden; margin-top: 2px; }
+.pg-prog span { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #ffd34a, #ff7a45); transition: width .3s; }
+@media (max-width: 600px) { #pg-hud { grid-template-columns: auto auto 1fr; } .pg-goal { grid-column: 1 / -1; grid-row: 2; justify-self: stretch; } .pg-right { grid-column: 3; grid-row: 1; } }
+
+/* narrator chime */
+#pg-chime { position: absolute; left: calc(10px + env(safe-area-inset-left)); bottom: calc(130px + env(safe-area-inset-bottom)); max-width: min(460px, calc(100% - 20px)); display: flex; gap: 10px; align-items: flex-start; background: #fffbea; color: #2b2350; border: 3px solid #ffc93c; border-radius: 18px; padding: 10px 14px; font: 600 clamp(14px, 3.4vw, 17px)/1.35 Lexend, Andika, system-ui, sans-serif; z-index: 6; box-shadow: 0 8px 24px rgba(0, 0, 0, .3); }
+#pg-chime .pc-ic { font-size: 30px; line-height: 1; }
+#pg-chime b { color: #b54708; }
+#pg-chime.pop { animation: pg-pop .45s cubic-bezier(.3, 1.5, .5, 1); }
+@keyframes pg-pop { from { transform: translateY(20px) scale(.9); opacity: 0; } }
+@media (min-width: 900px) { #pg-chime { bottom: 24px; } }
+
+/* touch controls */
+#pg-stick { position: absolute; width: 110px; height: 110px; border-radius: 50%; background: rgba(255, 255, 255, .16); border: 3px solid rgba(255, 255, 255, .5); z-index: 4; pointer-events: none; }
+#pg-stick .knob { position: absolute; left: 30px; top: 30px; width: 50px; height: 50px; border-radius: 50%; background: rgba(255, 255, 255, .8); box-shadow: 0 3px 8px rgba(0, 0, 0, .3); }
+#pg-actions { position: absolute; right: calc(14px + env(safe-area-inset-right)); bottom: calc(18px + env(safe-area-inset-bottom)); display: flex; gap: 10px; align-items: flex-end; z-index: 5; }
+.pg-act { min-width: 72px; height: 72px; border-radius: 36px; border: 0; padding: 0 16px; background: rgba(255, 255, 255, .92); color: #2b2350; font: 700 18px Fredoka, sans-serif; box-shadow: 0 5px 0 rgba(0, 0, 0, .25); touch-action: none; }
+.pg-act.big { min-width: 92px; height: 92px; border-radius: 46px; font-size: 22px; background: #ffc93c; }
+.pg-act.down { transform: translateY(4px); box-shadow: 0 1px 0 rgba(0, 0, 0, .25); }
+@media (pointer: fine) { .pg-act { min-width: 60px; height: 60px; font-size: 15px; } }
+
+#pg-flash { position: absolute; inset: 0; pointer-events: none; z-index: 7; }
+#pg-flash.on { animation: pg-flash .5s; }
+@keyframes pg-flash { 0% { background: rgba(255, 40, 40, .45); } 100% { background: transparent; } }
+
+/* title + panels */
+.pg-screen, .pg-ov { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px; overflow-y: auto; z-index: 10; }
+.pg-screen { background: radial-gradient(ellipse at 50% 0, rgba(255, 255, 255, .08), transparent 70%); }
+.pg-ov { background: rgba(10, 14, 28, .6); }
+.pg-card { background: #fff; color: #2b2350; border-radius: 26px; padding: 22px 20px; width: min(520px, 100%); margin: auto; text-align: center; box-shadow: 0 20px 60px rgba(0, 0, 0, .4); font-family: Lexend, Andika, system-ui, sans-serif; }
+.pg-card h1 { font: 700 clamp(30px, 7vw, 44px) Fredoka, sans-serif; margin: 4px 0; color: var(--accent-d, #c94a2d); }
+.pg-card h2 { font: 700 26px Fredoka, sans-serif; margin: 6px 0; }
+.pg-mascot { font-size: 64px; line-height: 1; }
+.pg-story { font-size: 16px; line-height: 1.45; margin: 6px 0 10px; }
+.pg-kid { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; background: #f3f0ff; border-radius: 99px; padding: 4px 12px 4px 4px; }
+.pg-kid span { width: 30px; height: 30px; border-radius: 50%; background: var(--c); display: grid; place-items: center; }
+.pg-stats { margin: 10px 0; font-size: 14px; line-height: 1.6; }
+.pg-stats .tag { background: #fff1c2; border-radius: 99px; padding: 1px 8px; font-size: 12px; }
+.pg-badges { display: flex; justify-content: center; gap: 6px; margin-bottom: 8px; }
+.pg-badges .b { width: 38px; height: 44px; border-radius: 10px; background: #f1f3f7; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 18px; }
+.pg-badges .b.got { background: #fff1c2; box-shadow: 0 0 0 2px #ffc93c; }
+.pg-badges small { font-size: 10px; font-weight: 700; }
+.pg-boss { background: linear-gradient(90deg, #fff1c2, #ffe08a); border-radius: 14px; padding: 8px 12px; margin-bottom: 10px; }
+.pg-btn { border: 0; border-radius: 16px; padding: 12px 18px; font: 700 17px Fredoka, sans-serif; cursor: pointer; background: #f1f3f7; color: #2b2350; box-shadow: 0 4px 0 rgba(0, 0, 0, .12); margin: 4px; }
+.pg-btn.go { background: var(--accent, #ff6b4a); color: #fff; box-shadow: 0 5px 0 var(--accent-d, #c94a2d); }
+.pg-btn.big { font-size: 24px; padding: 14px 40px; margin: 6px 0 10px; }
+.pg-btn:active { transform: translateY(3px); }
+.pg-row { display: flex; flex-wrap: wrap; justify-content: center; }
+.pg-howto { text-align: left; font-size: 15px; line-height: 1.5; padding-left: 20px; }
+.pg-keys { font-size: 12px; opacity: .6; margin: 8px 0 0; }
+.pg-pbtns { display: flex; flex-wrap: wrap; justify-content: center; margin-top: 10px; }
+.pg-stars { font-size: 44px; letter-spacing: 4px; color: #e3e6ee; }
+.pg-stars .on { color: #ffc93c; text-shadow: 0 2px 0 #c98a00; }
+.pg-real { background: #eef7ff; border-radius: 14px; padding: 10px 12px; text-align: left; line-height: 1.4; margin-top: 10px; }
+.pg-cert { background: linear-gradient(135deg, #fff8e1, #ffe9a8); border: 3px solid #ffc93c; border-radius: 18px; padding: 12px; font-size: 18px; margin-top: 8px; }
+.pg-near { background: #fff4d6; border-radius: 12px; padding: 8px; }
+.pg-card.lesson { width: min(560px, 100%); }
+.pl-head { display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+.pl-tag { background: #e7f0ff; border-radius: 99px; padding: 3px 10px; }
+.pl-art { min-height: 60px; font-size: 64px; line-height: 1.1; margin: 10px 0; display: flex; justify-content: center; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pl-art svg { max-width: 100%; height: auto; max-height: 38vh; }
+.pl-text { font-size: 18px; line-height: 1.5; }
+#pg-toast { position: fixed; left: 50%; top: 90px; transform: translate(-50%, -20px); background: #2b2350; color: #fff; padding: 10px 16px; border-radius: 14px; font: 700 16px Fredoka, sans-serif; opacity: 0; transition: .25s; z-index: 30; pointer-events: none; max-width: 90vw; text-align: center; }
+#pg-toast.show { opacity: 1; transform: translate(-50%, 0); }
+#pg-confetti { position: fixed; inset: 0; pointer-events: none; z-index: 40; overflow: hidden; }
+#pg-confetti i { position: absolute; top: -12px; width: 10px; height: 14px; border-radius: 2px; animation: pg-fall 2.2s ease-in forwards; }
+@keyframes pg-fall { to { transform: translateY(105vh) rotate(540deg); } }
+body.playgame.dark .pg-card { background: #182039; color: #e8edf8; }
+body.playgame.dark .pg-btn:not(.go) { background: #26335a; color: #e8edf8; }
+body.playgame.dark .pg-kid { background: #26335a; }
+body.playgame.dark .pg-badges .b { background: #26335a; }
+body.playgame.dark .pg-real { background: #1d2b4f; }
+body.playgame.dark .pl-tag { background: #26335a; }
+@media (prefers-reduced-motion: reduce) { #pg-chime.pop, #pg-flash.on { animation: none; } }
+.pg-stats .tag { color: #6b4b00; }
+.pg-near { color: #5a3d00; }
+.pg-level, .pg-score { max-width: 52vw; }
+/* narrator sits above the touch buttons, compact on phones */
+@media (max-width: 600px) { #pg-chime { bottom: calc(104px + env(safe-area-inset-bottom)); font-size: 14px; padding: 8px 10px; } #pg-chime .pc-ic { font-size: 24px; } }
+/* short landscape phones: narrator tucks into the bottom-left corner */
+@media (max-height: 500px) { #pg-chime { bottom: calc(8px + env(safe-area-inset-bottom)); max-width: min(360px, 44vw); font-size: 13px; padding: 6px 10px; } #pg-chime .pc-ic { font-size: 22px; } }
+/* side-scrolling games keep the narrator at the top so it never covers your hero */
+body.chime-top #pg-chime { bottom: auto; top: calc(var(--hudb, 120px) + 4px); }
+@media (min-width: 900px) { body.chime-top #pg-chime { left: auto; right: 16px; } }
+/* short landscape phones: the puzzle card shows the question itself */
+body.pz-short .pg-goal { display: none; }
+body.pz-short #pg-chime, body.pz-short.chime-top #pg-chime { top: auto; bottom: 8px; left: auto; right: 124px; max-width: 300px; }
+/* while a puzzle card is open, the narrator gives hints below it */
+body.pz-open #pg-chime, body.pz-open.chime-top #pg-chime { top: auto; bottom: calc(104px + env(safe-area-inset-bottom)); }
+@media (min-width: 900px) { body.pz-open #pg-chime, body.pz-open.chime-top #pg-chime { left: auto; right: 16px; bottom: 130px; max-width: 300px; } }
+body.pz-short.pz-open #pg-chime, body.pz-short.pz-open.chime-top #pg-chime { top: auto; bottom: 8px; left: auto; right: 124px; max-width: 300px; }
+/* short landscape phones: stack the touch buttons on the right edge so games get the full width */
+@media (max-height: 500px) { #pg-actions { flex-direction: column-reverse; align-items: flex-end; gap: 8px; } .pg-act { min-width: 64px; height: 56px; font-size: 15px; } .pg-act.big { min-width: 84px; height: 76px; font-size: 18px; } }

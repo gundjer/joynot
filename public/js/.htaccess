@@ -1,0 +1,10 @@
+# JoyNot shared scripts: browsers check for a newer copy each time (fast "not changed" answers).
+# (fast "not changed" answers, but updates show up right away on phones and tablets).
+<IfModule mod_headers.c>
+    <FilesMatch "\.(js|css)$">
+        Header set Cache-Control "no-cache"
+    </FilesMatch>
+</IfModule>
+<IfModule mod_mime.c>
+    AddType text/javascript .js
+</IfModule>
