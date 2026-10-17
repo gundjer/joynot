@@ -3,7 +3,14 @@
 // link is open, messages and the game picture go that way (fast); otherwise they go through JoyNot (about ½ second).
 // Talk/video ride on the same direct link (audio/video tracks). STUN/TURN servers (your own coturn) come from the server
 // in o.ice. No outside (Google) servers: with none set, devices on the same Wi-Fi still link directly.
+// Tracks on each link, always in this order: [talk audio] [game screen video, kid → grown-up] [camera video, both ways].
+//  - game screen: only when the host passes screen: true (a live video of the kid's game for grown-ups watching)
+//  - camera: when Video is ON in Grown-ups → settings. Both sides send their camera so they see each other.
 const ICE = [];
+// Laravel trims every string it receives (TrimStrings), which cuts the last line break off an SDP sent through JoyNot.
+// Browsers then refuse it ("Invalid SDP line") and the direct link — talk, video, the live game view — never starts.
+// Put the line break back before using it.
+const fixSdp = d => (d && typeof d.sdp === 'string' ? { type: d.type, sdp: d.sdp.replace(/\s*$/, '') + '\r\n' } : d);
 
 export class CoopLink {
   /**
@@ -15,7 +22,7 @@ export class CoopLink {
     this.o = o; this.since = 0; this.ver = 0; this.out = []; this.peers = new Map(); this.members = [];
     this.stopped = false; this.mid = 0; this.seen = new Set(); this.lastStateRelay = 0; this.pendingState = null; this.fail = 0;
     this.rtcOk = !o.noRtc && typeof RTCPeerConnection !== 'undefined';
-    this.media = o.media || { audio: false, video: false }; this.micTrack = null; this.camTrack = null;
+    this.media = o.media || { audio: false, video: false }; this.micTrack = null; this.camTrack = null; this.screenTrack = null;
   }
   csrf() { return this.o.csrf || document.querySelector('meta[name="csrf-token"]')?.content || ''; }
   start() { this.loop(); }
@@ -86,8 +93,8 @@ export class CoopLink {
     if (!body || typeof body !== 'object') return;
     if (body.mid) { if (this.seen.has(body.mid)) return; this.seen.add(body.mid); if (this.seen.size > 400) this.seen = new Set([...this.seen].slice(-200)); }
     if (body.t === 'st') { this.o.onState && this.o.onState(body.s); return; }
-    if (body.t === 'rtc-offer') { this.answer(from, body.sdp); return; }
-    if (body.t === 'rtc-answer') { const p = this.peers.get(from); if (p) p.pc.setRemoteDescription(body.sdp).then(() => this.drainIce(p)).catch(() => {}); return; }
+    if (body.t === 'rtc-offer') { this.answer(from, body.sdp, body); return; }
+    if (body.t === 'rtc-answer') { const p = this.peers.get(from); if (p) p.pc.setRemoteDescription(fixSdp(body.sdp)).then(() => this.drainIce(p)).catch(e => console.warn('JoyNot direct link: bad answer', e && e.message)); return; }
     if (body.t === 'rtc-ice') { const p = this.peers.get(from); if (!p) { (this.early = this.early || {})[from] = (this.early[from] || []).concat([body.c]); return; } if (p.pc.remoteDescription) p.pc.addIceCandidate(body.c).catch(() => {}); else p.ice.push(body.c); return; }
     this.o.onMsg && this.o.onMsg(from, body);
   }
@@ -98,41 +105,71 @@ export class CoopLink {
     if (!this.rtcOk || this.peers.has(token)) return;
     const p = this.peer(token);
     const ch = p.pc.createDataChannel('joy'); this.wire(token, p, ch);
-    // talk: both ways · video: grown-up → kid only (the kid's camera is never used)
-    if (this.media.audio) { const tr = p.pc.addTransceiver('audio', { direction: 'sendrecv' }); if (this.micTrack) tr.sender.replaceTrack(this.micTrack).catch(() => {}); }
-    if (this.media.video) p.pc.addTransceiver('video', { direction: 'recvonly' });
-    p.pc.createOffer().then(o => p.pc.setLocalDescription(o)).then(() => this.relay(token, { t: 'rtc-offer', sdp: p.pc.localDescription })).catch(() => {});
+    // talk: both ways · game screen: kid → grown-up · camera: both ways (they see each other)
+    if (this.media.audio) { const tr = p.pc.addTransceiver('audio', { direction: 'sendrecv' }); p.tr.audio = tr; if (this.micTrack) tr.sender.replaceTrack(this.micTrack).catch(() => {}); }
+    if (this.o.screen) { const tr = p.pc.addTransceiver('video', { direction: 'sendonly' }); p.tr.screen = tr; if (this.screenTrack) tr.sender.replaceTrack(this.screenTrack).catch(() => {}); }
+    if (this.media.video) { const tr = p.pc.addTransceiver('video', { direction: 'sendrecv' }); p.tr.cam = tr; if (this.camTrack) tr.sender.replaceTrack(this.camTrack).catch(() => {}); }
+    p.pc.createOffer().then(o => p.pc.setLocalDescription(o)).then(() => this.relay(token, { t: 'rtc-offer', sdp: p.pc.localDescription, screen: !!this.o.screen, cam: !!this.media.video })).catch(() => {});
   }
-  async answer(from, sdp) {
+  async answer(from, sdp, info = {}) {
     if (!this.rtcOk) return;
     if (this.o.role === 'member') this.hostToken = from;
     const old = this.peers.get(from); if (old) { try { old.pc.close(); } catch (e) {} this.peers.delete(from); }
     const p = this.peer(from);
+    if (info.screen !== undefined) p.hasScreen = !!info.screen;
     if (this.early && this.early[from]) { p.ice.push(...this.early[from]); delete this.early[from]; }
     p.pc.ondatachannel = e => this.wire(from, p, e.channel);
-    try { await p.pc.setRemoteDescription(sdp); this.drainIce(p); this.mediaAnswer(p); const a = await p.pc.createAnswer(); await p.pc.setLocalDescription(a); this.relay(from, { t: 'rtc-answer', sdp: p.pc.localDescription }); } catch (e) {}
+    try { await p.pc.setRemoteDescription(fixSdp(sdp)); this.drainIce(p); this.mediaAnswer(p); const a = await p.pc.createAnswer(); await p.pc.setLocalDescription(a); this.relay(from, { t: 'rtc-answer', sdp: p.pc.localDescription }); } catch (e) { console.warn("JoyNot direct link: could not answer", e && e.message); }
   }
-  /** Grown-up side: answer the kid's talk/video tracks (send our mic and, if on, our camera). */
+  /** Grown-up side: answer the kid's tracks (send our mic, and our camera on the camera track). */
   mediaAnswer(p) {
+    this.classify(p);
     for (const t of p.pc.getTransceivers()) {
-      const kind = t.receiver && t.receiver.track && t.receiver.track.kind;
       try {
-        if (kind === 'audio') { t.direction = 'sendrecv'; t.sender.replaceTrack(this.micTrack).catch(() => {}); }
-        if (kind === 'video') { t.direction = 'sendonly'; t.sender.replaceTrack(this.camTrack).catch(() => {}); }
+        if (t === p.tr.audio) { t.direction = 'sendrecv'; t.sender.replaceTrack(this.micTrack).catch(() => {}); }
+        else if (t === p.tr.screen) t.direction = 'recvonly';
+        else if (t === p.tr.cam) { t.direction = 'sendrecv'; t.sender.replaceTrack(this.camTrack).catch(() => {}); }
       } catch (e) {}
     }
+  }
+  /**
+   * Which track is which on a grown-up's phone (it follows the kid's order). The kid's game says in its offer whether
+   * it sends a game screen (o.screen on the host → the first video). Old games: one video = the camera.
+   */
+  classify(p) {
+    if (this.o.role !== 'member') return;
+    const ts = p.pc.getTransceivers(), kindOf = t => (t.receiver && t.receiver.track && t.receiver.track.kind) || '';
+    const vids = ts.filter(t => kindOf(t) === 'video');
+    p.tr.audio = ts.find(t => kindOf(t) === 'audio') || null;
+    const screenFirst = p.hasScreen === undefined ? vids.length > 1 || this.hostScreen : p.hasScreen;
+    p.tr.screen = screenFirst ? vids[0] || null : null;
+    p.tr.cam = screenFirst ? vids[1] || null : vids[0] || null;
+  }
+  /** Tag a remote track: 'audio' | 'screen' | 'cam'. */
+  tagOf(p, tr) {
+    if (!tr || !tr.receiver || !tr.receiver.track) return '';
+    if (tr.receiver.track.kind === 'audio') return 'audio';
+    if (this.o.role === 'member') { this.classify(p); return tr === p.tr.screen ? 'screen' : 'cam'; }
+    return 'cam';
   }
   /** Live talk possible to this device right now? */
   liveTo(token) { const p = this.peers.get(this.key(token)); return !!(p && p.open && p.pc.getTransceivers().some(t => t.receiver.track && t.receiver.track.kind === 'audio')); }
   liveToAll() { return this.o.role === 'member' ? this.liveTo('host') : this.members.length > 0 && this.members.every(m => this.liveTo(m.token)); }
   /** Push-to-talk: put our microphone on (track) or off (null) for every direct link. */
   setMic(track) { this.micTrack = track; this.eachSender('audio', track); }
-  setCam(track) { this.camTrack = track; this.eachSender('video', track); }
-  eachSender(kind, track) {
-    for (const p of this.peers.values()) for (const t of p.pc.getTransceivers()) {
-      if (t.receiver && t.receiver.track && t.receiver.track.kind === kind && t.sender) t.sender.replaceTrack(track).catch(() => {});
+  /** Our camera (both sides). */
+  setCam(track) { this.camTrack = track; this.eachSender('cam', track); }
+  /** Host: the live video of the game screen. */
+  setScreen(track) { this.screenTrack = track; this.eachSender('screen', track); }
+  eachSender(which, track) {
+    for (const p of this.peers.values()) {
+      if (this.o.role === 'member') this.classify(p);
+      const t = which === 'audio' ? (p.tr.audio || p.pc.getTransceivers().find(x => x.receiver && x.receiver.track && x.receiver.track.kind === 'audio')) : p.tr[which];
+      if (t && t.sender) t.sender.replaceTrack(track).catch(() => {});
     }
   }
+  /** Is the game screen video coming in from the kid right now? (grown-up side) */
+  screenLive() { const p = this.peers.get(this.key('host')); return !!(p && p.open && p.tr.screen && p.tr.screen.receiver.track && p.tr.screen.receiver.track.readyState === 'live'); }
   /** Host: talk/video switched on or off mid-game → reconnect everyone with the new tracks. */
   setMedia(media) {
     if (media.audio === this.media.audio && media.video === this.media.video) return;
@@ -142,8 +179,8 @@ export class CoopLink {
   }
   peer(token) {
     const pc = new RTCPeerConnection({ iceServers: this.o.ice && this.o.ice.length ? this.o.ice : ICE });
-    const p = { pc, ch: null, open: false, ice: [] };
-    pc.ontrack = e => { this.o.onTrack && this.o.onTrack(token, e.track, e.streams && e.streams[0]); };
+    const p = { pc, ch: null, open: false, ice: [], tr: { audio: null, screen: null, cam: null } };
+    pc.ontrack = e => { const tag = this.tagOf(p, e.transceiver) || e.track.kind; this.o.onTrack && this.o.onTrack(token, e.track, e.streams && e.streams[0], tag); };
     pc.onicecandidate = e => { if (e.candidate) this.relay(token, { t: 'rtc-ice', c: e.candidate.toJSON ? e.candidate.toJSON() : e.candidate }); };
     pc.onconnectionstatechange = () => { if (['failed', 'closed', 'disconnected'].includes(pc.connectionState)) { p.open = false; this.o.onLink && this.o.onLink(token, false); } };
     this.peers.set(token, p);

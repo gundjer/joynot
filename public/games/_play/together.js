@@ -1,11 +1,14 @@
 // JoyNot "Play together", kid's side — used by every game (Play engine games, Rusty's After Hours, Sparkle's Rainbow Journey).
-// Grown-ups join from the Grown-ups page on their own phone. They see a live picture of the kid's game, can tap it to
-// point (the kid sees a big glowing finger with the grown-up's name), cheer, light up a hint and use the game's own help
-// buttons. With "Talk & Chat" ON (Grown-ups → this game's settings) they can hold-to-talk and chat (chat is read aloud;
-// 3rd–5th graders can type back with emoji). With "Video bubble" ON the kid sees the grown-up's face.
-// The kid's camera is never used. The kid still does every puzzle, so reports stay honest (help is logged as "helped").
+// Grown-ups join from the Grown-ups page on their own phone. They see the kid's game live (the same screen the kid
+// sees, plus the same problem card and the same voice lines), can tap it to point (the kid sees a big glowing finger
+// with the grown-up's name), cheer, light up a hint and use the game's own help buttons. With "Talk & Chat" ON
+// (Grown-ups → this game's settings) they can hold-to-talk and chat (chat is read aloud; 3rd–5th graders can type back
+// with emoji). With "Video" ON it's a video call: the kid sees the grown-up and the grown-up sees the kid.
+// The kid still does every puzzle, so reports stay honest (help is logged as "helped").
 //
-// Picture: small JPEG frames of the game canvas. Direct link (WebRTC): about 3 a second. Through JoyNot: about 1 every 1.5 s.
+// Game picture: a live video of the game (about 15 frames a second) over the direct link (WebRTC, through your own
+// coturn relay when two homes can't connect directly). If no direct link is possible, small JPEG pictures go through
+// JoyNot instead (about 1 every 1.5 s), and the cameras send a small picture about every 1.5 s too.
 import { CoopLink } from './coop-link.js';
 import { talker, voicePlayer, playClip, sendChat, canTalk } from './coop-voice.js';
 
@@ -24,6 +27,7 @@ const CHUNK = 12000; // data channel message size that every browser accepts
  *   speak(text), stopSpeak(), sfx: { pop(), coin() }, duck(on)   read aloud (forced), sounds, music quieter while someone talks
  *   toast(text, ms), confetti()
  *   status(): { goal, screen, tip, level }                    what the grown-up sees under the picture (tip = coaching, never the answer)
+ *   view(): { ch, css }                                       optional: the problem card on screen (mirrored on the grown-up's phone)
  *   helps: [{ id, icon, label, cool }]                       game's own help buttons on the grown-up's phone
  *   onHelp(id, g): string|void                               do the help; return a line to show/say to the kid
  *   onHint(g): bool                                          game hint (e.g. replay the "we do" demo); false → read the goal again
@@ -40,6 +44,7 @@ export function mountTogether(o) {
   const player = voicePlayer(), seenChat = new Set(), log = [];
   let link = null, opening = false, urls = null, token = null, F = { talk: false, video: false }, kidTalk = null, iv = 0, t0 = performance.now();
   let lastFrame = 0, lastStatus = 0, lastRelay = 0, frameId = 0, unread = 0, opened = false, popT = 0, duck = 0, world = '';
+  let cam = null, camAsked = false, screenTrack = null, lastCamRelay = 0;
   const key = `joynot_coop_${o.game}_${kid.id}`;
   const ss = { get() { try { return JSON.parse(sessionStorage.getItem(key) || 'null'); } catch (e) { return null; } }, set(v) { try { sessionStorage.setItem(key, JSON.stringify(v)); } catch (e) {} } };
   const csrf = () => (o.csrf && o.csrf()) || document.querySelector('meta[name="csrf-token"]')?.content || '';
@@ -50,7 +55,7 @@ export function mountTogether(o) {
   root.id = 'jt';
   root.innerHTML = `
     <div class="jt-pill hidden" id="jtTalk"></div>
-    <div class="jt-videos" id="jtVideos"></div>
+    <div class="jt-videos" id="jtVideos"><div class="jt-vid jt-self hidden" id="jtSelf"><video autoplay playsinline muted></video><span>You</span></div></div>
     <div class="jt-points" id="jtPoints"></div>
     <div class="jt-pop hidden" id="jtPop"></div>
     <div class="jt-dock hidden" id="jtDock">
@@ -80,7 +85,7 @@ export function mountTogether(o) {
   tb.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); tb.classList.add('down'); talkDown(); });
   ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => tb.addEventListener(ev, () => { tb.classList.remove('down'); talkUp(); }));
   tb.addEventListener('contextmenu', e => e.preventDefault());
-  addEventListener('pointerdown', () => player.resume(), { capture: true });
+  addEventListener('pointerdown', () => { player.resume(); root.querySelectorAll('video').forEach(v => { if (v.paused && v.srcObject) v.play().catch(() => {}); }); }, { capture: true });
 
   const canType = () => { const r = String(kid.reads ?? 'K'); return r !== 'K' && r !== 'PK' && (parseInt(r, 10) || 0) >= 3; };
   function openChat() { opened = true; unread = 0; badge(); const gs = [...G.values()]; $('#jtWho').textContent = gs.length ? `💬 Chat with ${gs.map(g => g.name).join(' & ')}` : '💬 Chat'; $('#jtTyping').classList.toggle('hidden', !canType()); $('#jtChat').classList.remove('hidden'); const b = $('#jtLog'); b.scrollTop = b.scrollHeight; }
@@ -117,6 +122,41 @@ export function mountTogether(o) {
     o.sfx && o.sfx.pop && o.sfx.pop();
   }
 
+  // ------------------------------------------------ the kid's camera (Video ON: grown-ups and kid see each other)
+  async function startCam() {
+    if (cam || camAsked || !F.video || !canTalk()) return;
+    camAsked = true;
+    try {
+      cam = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 240 }, frameRate: { ideal: 15 } }, audio: false });
+      if (!F.video) { stopCam(); return; }
+      if (link) link.setCam(cam.getVideoTracks()[0]);
+      const v = $('#jtSelf video'); v.srcObject = cam; v.play().catch(() => {});
+      $('#jtSelf').classList.toggle('hidden', !G.size);
+    } catch (e) { cam = null; o.toast && o.toast('📹 Ask a grown-up to allow the camera so they can see you.', 3200); }
+    camAsked = false;
+  }
+  function stopCam() {
+    if (cam) cam.getTracks().forEach(t => t.stop());
+    cam = null; if (link) link.setCam(null);
+    const v = $('#jtSelf video'); if (v) v.srcObject = null; $('#jtSelf').classList.add('hidden');
+  }
+
+  // ------------------------------------------------ live video of the game screen for grown-ups
+  // A small copy of the game canvas (plus whatever the game adds with o.compose) is redrawn ~15 times a second and
+  // sent as a video track. Grown-ups see exactly what the kid sees, smoothly.
+  const mirror = document.createElement('canvas'), mctx = mirror.getContext('2d');
+  function screenOn() {
+    if (screenTrack || !mirror.captureStream) return;
+    try { const s = mirror.captureStream(15); screenTrack = s.getVideoTracks()[0]; if (link) link.setScreen(screenTrack); } catch (e) { screenTrack = null; }
+  }
+  function drawMirror() {
+    const c = canvas(); if (!c || !c.width) return;
+    const r = c.getBoundingClientRect(), ar = r.width / Math.max(1, r.height);
+    const w = ar >= 1 ? 720 : Math.round(720 * ar), h = ar >= 1 ? Math.round(720 / ar) : 720;
+    if (mirror.width !== w || mirror.height !== h) { mirror.width = w; mirror.height = h; }
+    try { mctx.drawImage(c, 0, 0, w, h); if (o.compose) o.compose(mctx, w, h); } catch (e) {}
+  }
+
   // ------------------------------------------------ the link
   async function open() {
     if (opening || link) return;
@@ -129,30 +169,41 @@ export function mountTogether(o) {
       ss.set({ session: j.session, token: j.token });
       urls = j.urls; token = j.token; F = { ...F, ...(j.features || {}) };
       link = new CoopLink({
-        urls: j.urls, token: j.token, role: 'host', csrf: csrf(), ice: j.ice, media: { audio: F.talk, video: F.video },
-        onMsg, onMembers, onPoll, onLink: () => {}, onEnded: () => { link = null; G.clear(); dock(); },
-        onTrack: (tk, track) => { if (track.kind === 'audio') player.attach(tk, track); else if (track.kind === 'video') video(tk, track); },
+        urls: j.urls, token: j.token, role: 'host', csrf: csrf(), ice: j.ice, media: { audio: F.talk, video: F.video }, screen: !!mirror.captureStream,
+        onMsg, onMembers, onPoll, onLink: () => { lastStatus = 0; }, onEnded: () => { link = null; G.clear(); dock(); stopCam(); },
+        onTrack: (tk, track, stream, tag) => { if (track.kind === 'audio') player.attach(tk, track); else if (tag === 'cam') video(tk, track); },
       });
+      window.__joynotLink = link; // tests
+      if (screenTrack) link.setScreen(screenTrack);
+      if (cam) link.setCam(cam.getVideoTracks()[0]);
       kidTalk = talker({ link, voiceUrl: urls.voice, token, csrf: csrf(), onTalk: (on, mode) => pill(on ? (mode === 'clip' ? '🎙️ Recording… let go to send' : '🎙️ They can hear you!') : '', '#2fae66'), onError: m => o.toast && o.toast('🎙️ ' + m, 2600) });
       link.start();
       addEventListener('pagehide', () => link && link.end());
-      iv = setInterval(tick, 110);
+      iv = setInterval(tick, 66);
     } catch (e) {} finally { opening = false; }
   }
   function onPoll(j) {
     if (!j.features) return;
     const was = F; F = { talk: !!j.features.talk, video: !!j.features.video };
-    if (was.talk !== F.talk || was.video !== F.video) { link.setMedia({ audio: F.talk, video: F.video }); if (!F.talk) talkUp(); dock(); }
+    if (was.talk !== F.talk || was.video !== F.video) {
+      if (F.video && G.size) startCam(); else if (!F.video) stopCam();
+      link.setMedia({ audio: F.talk, video: F.video }); if (!F.talk) talkUp(); dock();
+    }
   }
   function grownup(tk, name, color) {
     let g = G.get(tk);
-    if (!g) { g = { token: tk, name: name || 'Grown-up', color: color || '#8b6cff', cool: {}, cam: false }; G.set(tk, g); }
+    if (!g) { g = { token: tk, name: name || 'Grown-up', color: color || '#8b6cff', cool: {}, cam: false, screen: false }; G.set(tk, g); }
     if (name) g.name = name; if (color) g.color = color;
     return g;
   }
   const ready = (g, k, s) => { const n = now(); if ((g.cool[k] || 0) > n) return false; g.cool[k] = n + (s ?? COOL[k] ?? 5); return true; };
-  function joined(g) { o.sfx && o.sfx.coin && o.sfx.coin(); pop(`<b style="color:${esc(g.color)}">👋 ${esc(g.name)}</b> is playing with you!`, 4000); o.speak && o.speak(`${g.name} is playing with you!`); dock(); lastStatus = 0; }
-  function left(g) { video(g.token, null); o.toast && o.toast(`👋 ${g.name} left`, 1800); dock(); }
+  function joined(g) {
+    o.sfx && o.sfx.coin && o.sfx.coin(); pop(`<b style="color:${esc(g.color)}">👋 ${esc(g.name)}</b> is playing with you!`, 4000); o.speak && o.speak(`${g.name} is playing with you!`);
+    dock(); lastStatus = 0; screenOn();
+    if (F.video) startCam();
+    if (cam) $('#jtSelf').classList.remove('hidden');
+  }
+  function left(g) { video(g.token, null); o.toast && o.toast(`👋 ${g.name} left`, 1800); dock(); if (!G.size) { stopCam(); } }
   function onMsg(from, b) {
     if (b.t === 'join') { const isNew = !G.has(from); const g = grownup(from, b.name, b.color); if (isNew) joined(g); link.connect(from); return; }
     if (b.t === 'chat') {
@@ -181,56 +232,81 @@ export function mountTogether(o) {
     }
     if (b.t === 'talk' && F.talk) { setDuck(!!b.on); pill(b.on ? `🎙️ ${g.name} is talking…` : '', g.color); }
     if (b.t === 'voice' && F.talk) playClip(b.url, () => { setDuck(true); pill(`🎙️ ${g.name} is talking…`, g.color); }, () => { setDuck(false); pill(''); });
-    if (b.t === 'cam') { g.cam = !!b.on && F.video; const el = $('#jtVideos').querySelector(`[data-tk="${g.token}"]`); if (el) el.classList.toggle('hidden', !g.cam); }
+    if (b.t === 'cam') { g.cam = !!b.on && F.video; const el = bubble(g.token); el.classList.toggle('hidden', !g.cam); if (!g.cam) { const im = el.querySelector('img'); if (im) im.removeAttribute('src'); } }
+    // camera picture through JoyNot (no direct link): show it in the grown-up's bubble
+    if (b.t === 'camf' && F.video && typeof b.d === 'string' && b.d.startsWith('data:image/jpeg')) {
+      g.cam = true; const el = bubble(g.token); el.classList.remove('hidden');
+      if (!el.dataset.live) { const im = el.querySelector('img'); im.src = b.d; im.classList.remove('hidden'); el.querySelector('video').classList.add('hidden'); }
+    }
+    if (b.t === 'scr') g.screen = !!b.on; // this grown-up is getting the live game video (so skip the slow pictures)
   }
   function onMembers(list) {
     const live = new Set(list.map(m => m.token));
     for (const m of list) if (!G.has(m.token)) { joined(grownup(m.token, m.name, m.color)); link.connect(m.token); }
     for (const [k, g] of G) if (!live.has(k)) { G.delete(k); link.drop(k); player.drop(k); left(g); }
   }
-  function video(tk, track) {
+  function bubble(tk) {
     const box = $('#jtVideos'); let el = box.querySelector(`[data-tk="${tk}"]`);
-    if (!track) { if (el) el.remove(); return; }
-    const g = G.get(tk);
-    if (!el) { el = document.createElement('div'); el.className = 'jt-vid hidden'; el.dataset.tk = tk; el.innerHTML = '<video autoplay playsinline muted></video><span></span>'; box.appendChild(el); }
+    if (!el) { el = document.createElement('div'); el.className = 'jt-vid hidden'; el.dataset.tk = tk; el.innerHTML = '<video autoplay playsinline muted></video><img class="hidden" alt=""><span></span>'; box.insertBefore(el, $('#jtSelf')); }
+    const g = G.get(tk); el.querySelector('span').textContent = g ? g.name : ''; if (g) el.style.setProperty('--c', g.color);
+    return el;
+  }
+  function video(tk, track) {
+    if (!track) { const el = $('#jtVideos').querySelector(`[data-tk="${tk}"]`); if (el) el.remove(); return; }
+    const el = bubble(tk), g = G.get(tk);
     const v = el.querySelector('video'); v.srcObject = new MediaStream([track]); v.play().catch(() => {});
-    el.querySelector('span').textContent = g ? g.name : '';
-    if (g) { el.style.setProperty('--c', g.color); el.classList.toggle('hidden', !g.cam); }
+    const live = () => { el.dataset.live = '1'; v.classList.remove('hidden'); el.querySelector('img').classList.add('hidden'); };
+    track.onunmute = live; v.onplaying = live;
+    track.onmute = () => { delete el.dataset.live; };
+    if (g) el.classList.toggle('hidden', !g.cam);
   }
 
   // ------------------------------------------------ the live picture + what the kid is doing
   const shot = document.createElement('canvas');
-  function frame(maxW, q) {
-    const c = canvas(); if (!c || !c.width || !c.height) return null;
-    const k = Math.min(1, maxW / c.width), w = Math.max(2, Math.round(c.width * k)), h = Math.max(2, Math.round(c.height * k));
+  function jpeg(src, maxW, q) {
+    if (!src || !src.width || !src.height) return null;
+    const sw = src.videoWidth || src.width, sh = src.videoHeight || src.height;
+    const k = Math.min(1, maxW / sw), w = Math.max(2, Math.round(sw * k)), h = Math.max(2, Math.round(sh * k));
     if (shot.width !== w || shot.height !== h) { shot.width = w; shot.height = h; }
     const x = shot.getContext('2d');
-    try { x.drawImage(c, 0, 0, w, h); return shot.toDataURL('image/jpeg', q); } catch (e) { return null; }
+    try { x.drawImage(src, 0, 0, w, h); return shot.toDataURL('image/jpeg', q); } catch (e) { return null; }
   }
+  const frame = (maxW, q) => { drawMirror(); return jpeg(mirror.width ? mirror : canvas(), maxW, q); };
+  function camShot() { const v = $('#jtSelf video'); return cam && v && v.videoWidth ? jpeg(v, 160, 0.5) : null; }
   function status() {
     let s = {};
     try { s = (o.status && o.status()) || {}; } catch (e) {}
+    let view = null;
+    try { view = o.view ? o.view() : null; } catch (e) {}
     const c = canvas(), r = c ? c.getBoundingClientRect() : { width: 16, height: 9 };
     return {
       kid: kid.name, goal: String(s.goal || '').slice(0, 300), screen: String(s.screen || '').slice(0, 400), tip: String(s.tip || '').slice(0, 300),
       level: String(s.level || '').slice(0, 80), ar: Math.round(r.width / Math.max(1, r.height) * 1000) / 1000,
       helps: (o.helps || []).map(h => [h.id, h.icon || '✨', h.label || h.id]), features: F, world,
+      view: view && view.ch ? { ch: view.ch, css: String(view.css || '') } : null,
     };
   }
   function tick() {
     if (!link || !G.size || document.hidden) return;
     const n = performance.now();
+    if (screenTrack) drawMirror(); // keeps the live game video moving
     const direct = link.members.filter(m => link.linkOpen(m.token)), relay = link.members.length - direct.length;
-    if (direct.length && n - lastFrame > 330) {
+    const needFrames = direct.filter(m => !(G.get(m.token) || {}).screen);
+    if (needFrames.length && n - lastFrame > 330) {
       lastFrame = n;
       const d = frame(480, 0.55);
       if (d) {
         const id = ++frameId, parts = Math.ceil(d.length / CHUNK);
-        for (const m of direct) for (let i = 0; i < parts; i++) link.direct1(m.token, { t: 'fr', k: id, i, n: parts, d: d.slice(i * CHUNK, (i + 1) * CHUNK) });
+        for (const m of needFrames) for (let i = 0; i < parts; i++) link.direct1(m.token, { t: 'fr', k: id, i, n: parts, d: d.slice(i * CHUNK, (i + 1) * CHUNK) });
       }
     }
     if (n - lastStatus > 600) { lastStatus = n; const s = status(); for (const m of direct) link.direct1(m.token, { t: 'st', s }); }
-    if (relay > 0 && n - lastRelay > 1500) { lastRelay = n; link.pendingState = { ...status(), f: frame(360, 0.5) }; }
+    if (relay > 0 && n - lastRelay > 1500) {
+      lastRelay = n;
+      const st = { ...status(), f: frame(360, 0.5) };
+      if (F.video && n - lastCamRelay > 1400) { lastCamRelay = n; const c = camShot(); if (c) st.cam = c; }
+      link.pendingState = st;
+    }
   }
 
   return {
@@ -240,14 +316,19 @@ export function mountTogether(o) {
     grownups: () => [...G.values()],
     features: () => F,
     /** Something changed on screen — send the status soon. */
-    poke() { lastStatus = 0; },
+    poke() { lastStatus = Math.min(lastStatus, performance.now() - 450); },
+    /** Something was said out loud on the kid's screen: grown-ups hear it too (on their phone, if they want). */
+    say(text, opt = {}) {
+      if (!link || !G.size || !text) return;
+      link.send('*', { t: 'say', text: String(text).slice(0, 400), pitch: +opt.pitch || 1, rate: +opt.rate || 1, voice: opt.voice || '' });
+    },
     talkDown, talkUp, openChat, closeChat,
-    stop() { clearInterval(iv); talkUp(); if (link) link.end(); link = null; },
+    stop() { clearInterval(iv); talkUp(); stopCam(); if (screenTrack) screenTrack.stop(); if (link) link.end(); link = null; },
   };
 }
 
 function css() {
   if (document.querySelector('link[data-together]')) return;
-  const ln = document.createElement('link'); ln.rel = 'stylesheet'; ln.href = '/games/_play/together.css?v=1'; ln.dataset.together = '1';
+  const ln = document.createElement('link'); ln.rel = 'stylesheet'; ln.href = '/games/_play/together.css?v=2'; ln.dataset.together = '1';
   document.head.appendChild(ln);
 }

@@ -1,15 +1,35 @@
 // Text-to-speech (voices) + speech recognition (the TALK button)
 
 // Voice choice lives in /js/joynot-voice.js (warm natural female voice, or the one picked in Grown-ups → Account).
-import { tune, clean } from '/js/joynot-voice.js';
+// Animatronics can ask for a different natural voice (opts.voice: 'deep' | 'bright' | 'warm') so they sound like
+// costumed performers instead of a robot. If the device has no such voice, the normal JoyNot voice is used.
+import { tune, clean, isAuto } from '/js/joynot-voice.js';
+
+const NATURAL = /(natural|premium|enhanced|neural|online)/i;
+const DEEP = /\b(guy|andrew|brian|christopher|eric|roger|steffan|davis|tony|aaron|arthur|daniel|evan|nathan|tom)\b|en-us-x-(iom|tpd|iol)/i;
+const BRIGHT = /\b(ana|emma|jenny|aria|ava|zoe|nicky|samantha)\b|en-us-x-(tpc|sfg)/i;
+function voiceFor(kind) {
+  // a grown-up or kid picked a voice (or the device's own voice): use that one for everybody
+  if (!kind || !isAuto() || !('speechSynthesis' in window)) return null;
+  let list = []; try { list = speechSynthesis.getVoices().filter(v => /^en([-_]|$)/i.test(v.lang || '')); } catch (e) { return null; }
+  const re = kind === 'deep' ? DEEP : kind === 'bright' ? BRIGHT : null; if (!re) return null;
+  const ok = v => re.test(v.name) || re.test(v.voiceURI || '');
+  // no Google online voices (the text would go to Google)
+  const local = list.filter(v => !(/google/i.test(v.name) && v.localService === false));
+  return local.find(v => ok(v) && NATURAL.test(v.name)) || local.find(ok) || null;
+}
 
 export const Voice = {
   speaking: false,
+  /** Called with (text, opts) every time something is said — grown-ups playing along hear the same lines. */
+  onSpeak: null,
   speak(text, opts = {}) {
+    try { this.onSpeak && text && this.onSpeak(String(text), opts); } catch (e) {}
     return new Promise(resolve => {
       if (!('speechSynthesis' in window) || !text) { resolve(); return; }
       try { speechSynthesis.resume(); } catch (e) {}
       const u = tune(new SpeechSynthesisUtterance(clean(text)), opts);
+      const v = voiceFor(opts.voice); if (v) { u.voice = v; u.lang = v.lang; }
       let done = false;
       const est = 1200 + text.length * 95 / (u.rate || 1);
       const timer = setTimeout(() => finish(), est + 2500);

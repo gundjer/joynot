@@ -70,8 +70,8 @@ return [
         'rustys-after-hours' => [
             'class' => App\Games\RustysAfterHours::class,
             'title' => "Rusty's After Hours",
-            'description' => 'Sneak through a spooky pizza place with your flashlight. Read the doors and solve the gates to escape before the animatronics find you!',
-            'cover' => '/games/rustys-after-hours/cover.jpg',
+            'description' => 'Sneak through a 3D pizza place after hours. Read the doors and solve the gates to escape the animatronics — then build your own animatronic and see if you can outrun it! Spookiness matches the kid’s grade.',
+            'cover' => '/games/rustys-after-hours/cover.jpg?v=2',
             'skills' => ['📖 Reading', '🔢 Math'],
             'ages' => 'Ages 5–10',
             'theme' => 'spooky',

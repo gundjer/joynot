@@ -27,10 +27,10 @@
 
 <section class="card" id="voice" style="max-width:860px;margin-top:16px">
     <h2>🔊 Read-aloud voice</h2>
-    <p class="small muted">JoyNot automatically picks the warmest, most natural female voice on this device. You can choose a different one here. The choice is saved <b>on this device only</b>, because every phone, tablet and computer has its own voices.</p>
+    <p class="small muted">JoyNot automatically picks the warmest, most natural female voice on this device. You can choose any voice installed on this phone, tablet or computer instead — or <b>this device's own voice</b> (the one set in the device's settings). Kids can also change it with the 🗣️ Voice button in games. The choice is saved <b>on this device only</b>, because every device has its own voices.</p>
     <label class="field">Voice
         <span class="voice-row">
-            <select id="voiceSel"><option value="">Automatic (recommended)</option></select>
+            <select id="voiceSel"><option value="">Automatic (JoyNot picks a natural voice)</option></select>
             <button type="button" class="btn sm" id="voiceTry">▶ Try it</button>
         </span>
     </label>
@@ -58,7 +58,7 @@
 
 @push('scripts')
 <script type="module">
-import { sortedVoices, onVoices, getPref, setPref, tune } from '/js/joynot-voice.js';
+import { fillVoiceSelect, onVoices, getPref, setPref, tune } from '/js/joynot-voice.js';
 const sel = document.getElementById('voiceSel');
 const rate = document.getElementById('voiceRate');
 const msg = document.getElementById('voiceMsg');
@@ -66,17 +66,8 @@ const pref = getPref();
 if (pref.rate) rate.value = String(pref.rate);
 
 function fill() {
-    const list = sortedVoices();
-    const keep = getPref().name || '';
-    sel.length = 1;
-    list.forEach((v, i) => {
-        const o = document.createElement('option');
-        o.value = v.name;
-        o.textContent = v.name.replace(/^Microsoft /, '').replace(/ Online \(Natural\)/, ' (natural)') + ' · ' + v.lang + (v.localService === false ? ' · online' : '') + (i === 0 ? '  ★ best' : '');
-        sel.appendChild(o);
-    });
-    sel.value = list.some(v => v.name === keep) ? keep : '';
-    msg.textContent = list.length ? '' : 'No read-aloud voices found on this device yet. Try again in a moment, or check the tips below.';
+    const n = fillVoiceSelect(sel);
+    msg.textContent = n ? '' : 'No read-aloud voices found on this device yet. Try again in a moment, or check the tips below.';
 }
 onVoices(fill);
 setTimeout(fill, 600);

@@ -3,7 +3,7 @@
     <div class="together-box">
         <h4>👨‍👩‍👧 Play together</h4>
         @foreach ($toggles as $name => $field)
-            @php $on = (string) ($settings[$name] ?? 'off') === 'on'; @endphp
+            @php $on = (string) $settings[$name] === 'on'; @endphp
             <label class="switch-row">
                 <input type="hidden" name="{{ $name }}" value="off">
                 <input type="checkbox" class="switch-input" name="{{ $name }}" value="on" @checked($on)>

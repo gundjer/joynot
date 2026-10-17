@@ -1,6 +1,6 @@
 // JoyNot service worker: lets the site install as an app and keeps game files loading on spotty Wi-Fi.
 // Pages and saves always go to the server. Game files: network first, cached copy when offline.
-const CACHE = 'joynot-v12';
+const CACHE = 'joynot-v13';
 // Every game file, so games keep loading on spotty Wi-Fi (about 3 MB). Regenerate this list when files are added.
 const ASSETS = [
   '/css/joynot.css',
@@ -134,6 +134,24 @@ const ASSETS = [
   '/games/rustys-after-hours/cover.jpg',
   '/games/rustys-after-hours/css/game.css',
   '/games/rustys-after-hours/js/answers.js',
+  '/games/rustys-after-hours/js/animatronics.js',
+  '/games/rustys-after-hours/js/render3d.js',
+  '/games/rustys-after-hours/js/textures.js',
+  '/games/rustys-after-hours/js/tier.js',
+  '/games/rustys-after-hours/audio/bong.mp3',
+  '/games/rustys-after-hours/audio/click.mp3',
+  '/games/rustys-after-hours/audio/close.mp3',
+  '/games/rustys-after-hours/audio/correct.mp3',
+  '/games/rustys-after-hours/audio/door.mp3',
+  '/games/rustys-after-hours/audio/glitch.mp3',
+  '/games/rustys-after-hours/audio/glitch2.mp3',
+  '/games/rustys-after-hours/audio/pickup.mp3',
+  '/games/rustys-after-hours/audio/power.mp3',
+  '/games/rustys-after-hours/audio/scratch.mp3',
+  '/games/rustys-after-hours/audio/snap.mp3',
+  '/games/rustys-after-hours/audio/switch.mp3',
+  '/games/rustys-after-hours/audio/win.mp3',
+  '/games/rustys-after-hours/audio/wrong.mp3',
   '/games/rustys-after-hours/js/audio.js',
   '/games/rustys-after-hours/js/bots.js',
   '/games/rustys-after-hours/js/challenge.js',

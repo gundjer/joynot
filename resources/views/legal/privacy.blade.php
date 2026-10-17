@@ -34,9 +34,9 @@
     </ul>
     <h3>Play-together voice, video and game pictures</h3>
     <ul>
-        <li><b>Hold-to-talk voice and the video bubble</b> are live and off by default. When a grown-up turns them on, the sound and picture go directly between your family's own devices. If two homes can't connect directly, they pass through our own relay server (coturn) without being saved. <b>We do not record live voice or video.</b></li>
+        <li><b>Hold-to-talk voice and the video call</b> are live and off by default. When a grown-up turns Video on, the grown-up's camera and the child's camera are both used so they can see each other (the child's device asks for permission first). The sound and picture go directly between your family's own devices. If two homes can't connect directly, they pass through our own relay server (coturn) without being saved. <b>We do not record live voice or video.</b></li>
         <li><b>Short voice messages.</b> If a live connection isn't possible, a voice message may be uploaded so the other family member can hear it. These clips are deleted after about 10 minutes, and right away when the game ends.</li>
-        <li><b>The game screen.</b> So a grown-up can help, a small picture of the game screen is shared with the family members who joined. It shows the game only (never the camera). It is not kept after the game ends.</li>
+        <li><b>The game screen.</b> So a grown-up can help, a live view of the game screen (and the problem on it) is shared with the family members who joined. It shows the game only, not the camera. It is not recorded or kept after the game ends.</li>
         <li>Only grown-ups who are signed in to <b>your</b> family account and have unlocked the Grown-ups area with your PIN can join a child's game. Strangers cannot join.</li>
     </ul>
     <h3>Collected automatically</h3>

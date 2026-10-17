@@ -39,6 +39,8 @@ class Kid extends Model
             'name' => $this->name,
             'avatar' => $this->avatar,
             'color' => $this->color,
+            // school grade ('PK', 'K', '1' … '5'), so games can match how spooky or hard they are to the kid's age
+            'grade' => $this->grade,
             // reading grade, so games know to read the answer choices aloud for little readers
             'reads' => $this->reading_grade ?: $this->grade,
             // math grade, so games with a math ladder (Bee Smart) start at the right level

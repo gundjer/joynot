@@ -27,6 +27,7 @@ export class Challenge {
       if (v === '⌫') el.textContent = el.textContent.slice(0, -1);
       else if (v === '✔') { if (el.textContent) { const val = el.textContent; el.textContent = ''; this.judge([val]); } }
       else if (el.textContent.length < 5) el.textContent += v;
+      this.changed();
     });
   }
 
@@ -37,7 +38,21 @@ export class Challenge {
       alive: () => sess === this.session,
     };
   }
-  bubble(t) { $('chBubble').textContent = t; }
+  bubble(t) { $('chBubble').textContent = t; this.changed(); }
+  /** Something on the pop-up changed: grown-ups watching get the new picture of it soon. */
+  changed() { try { this.onChange && this.onChange(); } catch (e) {} }
+  /** What the pop-up shows right now, for a grown-up's phone to show the same thing (null when closed). */
+  mirror() {
+    if (!this.resolve || !this.item) return null;
+    const vis = id => !$(id).classList.contains('hidden');
+    return {
+      cls: $('challenge').className.replace('hidden', '').trim(), title: $('chTitle').textContent, bubble: $('chBubble').textContent,
+      content: vis('chContent') ? $('chContent').innerHTML : '', teach: vis('chTeach') ? $('chTeach').innerHTML : '',
+      heard: $('chHeard').textContent, typed: vis('chPad') ? ($('padVal').textContent || '') : null,
+      listening: $('chTalk').classList.contains('listening'), track: this.item.track,
+      answer: String(this.item.track === 'reading' ? this.item.text : this.item.answer),
+    };
+  }
   sparky(t, o) { return this.k(this.session).say(t, o); }
   setBusy(b) { this.busy = b; ['chTalk', 'chHelp', 'chType'].forEach(id => $(id).disabled = b); }
 
@@ -57,8 +72,10 @@ export class Challenge {
     $('chContent').innerHTML = this.contentHTML(item);
     $('chHelp').textContent = item.kind === 'word' ? '🔊 Read it to me' : '💡 Help me';
     this.setBusy(false);
+    const pr = new Promise(res => { this.resolve = res; });
+    this.changed();
     this.intro();
-    return new Promise(res => { this.resolve = res; });
+    return pr;
   }
 
   contentHTML(it) {
@@ -89,10 +106,10 @@ export class Challenge {
     if (this.busy || this.finished) return;
     Sfx.click(); Voice.stop();
     this.setBusy(true);
-    $('chTalk').classList.add('listening'); $('chTalk').textContent = '👂 Listening...';
+    $('chTalk').classList.add('listening'); $('chTalk').textContent = '👂 Listening...'; this.changed();
     this.bubble('I\'m listening...');
     const r = await Ears.listen(this.item.type === 'phrase' || this.item.kind === 'word' ? 9000 : 6000);
-    $('chTalk').classList.remove('listening'); $('chTalk').textContent = '🎤 TALK';
+    $('chTalk').classList.remove('listening'); $('chTalk').textContent = '🎤 TALK'; this.changed();
     Sfx.init(); // iPhone can pause game sounds while the mic is on — wake them back up
     this.setBusy(false);
     if (this.finished) return;
@@ -110,7 +127,7 @@ export class Challenge {
     const it = this.item; let ok = false, missing = [];
     if (alts) {
       this.lastHeard = alts[0] || '';
-      $('chHeard').textContent = `I heard: "${this.lastHeard}"`;
+      $('chHeard').textContent = `I heard: "${this.lastHeard}"`; this.changed();
       const strict = this.store.data.settings.strict || 'easy';
       if (it.track === 'reading') {
         if (it.type === 'phrase') { const m = matchPhrase(it.text, alts, strict); ok = m.ok; missing = m.missing; }
@@ -146,7 +163,10 @@ export class Challenge {
   async runTeach(k) {
     const box = $('chTeach');
     box.classList.remove('hidden'); $('chContent').classList.add('hidden');
-    if (this.item.track === 'reading') await teachReading(this.item, box, k); else await teachMath(this.item, box, k);
+    this.changed();
+    const iv = setInterval(() => this.changed(), 700); // the teaching steps animate: keep grown-ups in sync
+    try { if (this.item.track === 'reading') await teachReading(this.item, box, k); else await teachMath(this.item, box, k); } finally { clearInterval(iv); }
+    this.changed();
     if (!k.alive()) return;
     // put the door back so he reads the real thing again (teaching stays for math)
     if (this.item.track === 'reading') { box.classList.add('hidden'); $('chContent').classList.remove('hidden'); }
@@ -211,5 +231,6 @@ export class Challenge {
     const r = this.resolve; this.resolve = null;
     r({ solved, clean: this._rec ? this._rec.clean : false, levelUp: !!(this._rec && this._rec.change === 1) });
     this._rec = null;
+    this.changed();
   }
 }

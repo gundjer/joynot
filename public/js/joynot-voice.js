@@ -1,6 +1,8 @@
 // JoyNot read-aloud voice: picks the warmest, most natural female English voice on this device.
-// Used by every game and by the voice picker in Grown-ups → Account.
-// A grown-up's choice is saved on this device (voices differ per phone/tablet/computer).
+// Used by every game, by the voice picker in Grown-ups → Account, and by the 🗣️ Voice button inside games.
+// Any voice installed on the phone, tablet or computer can be picked, or "This device's own voice" (the one set in the
+// device's settings). The choice is saved on this device (voices differ per phone/tablet/computer).
+export const DEVICE = '__device__';
 
 const PREF_KEY = 'joynot_voice_v1';
 
@@ -55,8 +57,17 @@ export function setPref(p) {
   try { localStorage.setItem(PREF_KEY, JSON.stringify(p)); } catch (e) {}
 }
 
+/** Every voice installed on this device: English first (best first), then the other languages. */
+export function allVoices() {
+  const en = sortedVoices(), rest = voices.filter(v => !en.includes(v)).sort((a, b) => (a.lang || '').localeCompare(b.lang || '') || a.name.localeCompare(b.name));
+  return [...en, ...rest];
+}
+/** No voice picked: JoyNot chooses (and games may give animatronics their own voices). */
+export const isAuto = () => !getPref().name;
+
 export function bestVoice() {
   const pref = getPref();
+  if (pref.name === DEVICE) return voices.find(v => v.default) || null; // null → the device's own default voice
   if (pref.name) {
     const hit = voices.find(v => v.name === pref.name);
     if (hit) return hit;
@@ -69,8 +80,8 @@ export function onVoices(fn) { listeners.push(fn); if (voices.length) fn(voices)
 // Natural voices sound best at their own pitch. Small, friendly tweaks only.
 export function tune(u, opts = {}) {
   const v = bestVoice();
-  if (v) { u.voice = v; u.lang = v.lang; } else { u.lang = 'en-US'; }
   const pref = getPref();
+  if (v) { u.voice = v; u.lang = v.lang; } else if (pref.name !== DEVICE) { u.lang = 'en-US'; }
   const natural = v && /(natural|premium|enhanced|google)/i.test(v.name);
   const speed = Number(pref.rate) || 1; // grown-up's speed setting (0.8 – 1.2)
   u.rate = (opts.rate ?? 0.95) * speed;
@@ -84,4 +95,25 @@ export function clean(text) {
   return String(text)
     .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}]/gu, ' ')
     .replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Fill a <select> with: Automatic · This device's own voice · every installed voice (English, then other languages).
+ * Keeps the saved choice selected. Used by Grown-ups → Account and the in-game 🗣️ Voice picker.
+ */
+export function fillVoiceSelect(sel) {
+  const keep = getPref().name || '';
+  const nice = v => v.name.replace(/^Microsoft /, '').replace(/ Online \(Natural\)/, ' (natural)') + ' · ' + v.lang + (v.default ? ' · device default' : '') + (v.localService === false ? ' · online' : '');
+  sel.innerHTML = '';
+  const add = (parent, value, text) => { const o = document.createElement('option'); o.value = value; o.textContent = text; parent.appendChild(o); };
+  add(sel, '', 'Automatic (JoyNot picks a natural voice)');
+  add(sel, DEVICE, "This device's own voice (from its settings)");
+  const list = allVoices(), en = sortedVoices();
+  const g1 = document.createElement('optgroup'); g1.label = 'English voices on this device';
+  en.forEach((v, i) => add(g1, v.name, nice(v) + (i === 0 ? '  ★ best' : '')));
+  if (en.length) sel.appendChild(g1);
+  const others = list.filter(v => !en.includes(v));
+  if (others.length) { const g2 = document.createElement('optgroup'); g2.label = 'Other languages'; others.forEach(v => add(g2, v.name, nice(v))); sel.appendChild(g2); }
+  sel.value = keep === DEVICE || list.some(v => v.name === keep) ? keep : '';
+  return list.length;
 }

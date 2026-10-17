@@ -1,9 +1,12 @@
 // JoyNot "Play together", grown-up's phone — every game except Bee Smart (which has Guard Bee).
-// Opened from the "Join" card on the Grown-ups pages. Shows a live picture of the kid's game.
-// Tap the picture to point. 🎉 Cheer, 💡 Hint (the game shows the next step, never the answer) and the game's own help
-// buttons. With Talk & Chat on: hold-to-talk and chat. With Video on: your camera in a bubble on the kid's screen.
+// Opened from the "Join" card on the Grown-ups pages. Shows the kid's game LIVE — the same screen the kid sees — and,
+// when a problem pops up, the same problem card on top (games that share it, like Rusty's After Hours), and you hear
+// the same voice lines (🔊 Hear game). Tap the picture to point. 🎉 Cheer, 💡 Hint (the game teaches how to get the
+// answer) and the game's own help buttons. With Talk & Chat on: hold-to-talk and chat. With Video on: a video call —
+// your camera in a bubble on the kid's screen, and the kid's camera here.
 import { CoopLink } from './coop-link.js';
 import { talker, voicePlayer, playClip, sendChat, canTalk } from './coop-voice.js';
+import { tune, clean } from '/js/joynot-voice.js';
 
 const C = window.COOP || {};
 const $ = s => document.querySelector(s);
@@ -17,7 +20,8 @@ const store = {
 };
 
 let F = { talk: false, video: false, ...(C.features || {}) }, me = null, link = null, talk = null, cam = null, st = null, net = 'connecting';
-let unread = 0, sheetOpen = false, toastT = 0, lastFrameAt = 0, helpsKey = '';
+let unread = 0, sheetOpen = false, toastT = 0, lastFrameAt = 0, helpsKey = '', screenLive = false, mirrorKey = '', kidCamLive = false;
+let hear = store.get('joynot_hear_game') !== 'off', camRelayT = 0;
 const cool = {}, parts = new Map(), player = voicePlayer(), seenChat = new Set(), chatLog = [];
 const ready = (k, s) => { const n = performance.now() / 1000; if ((cool[k] || 0) > n) return false; cool[k] = n + (s ?? COOL[k] ?? 5); return true; };
 
@@ -36,8 +40,10 @@ function nameScreen(msg = '') {
     <button class="btn go" type="submit">▶ Join the game</button></form></div>`;
   $('#leave').onclick = () => { location.href = C.urls.back; };
   $('#guard').querySelectorAll('.chips button').forEach(b => { b.onclick = () => { $('#nm').value = b.dataset.n; }; });
-  $('#nameForm').onsubmit = e => { e.preventDefault(); const n = $('#nm').value.trim(); if (!n) { $('#nm').focus(); return; } store.set('joynot_guard_name', n); join(n); };
+  $('#nameForm').onsubmit = e => { e.preventDefault(); const n = $('#nm').value.trim(); if (!n) { $('#nm').focus(); return; } store.set('joynot_guard_name', n); unlockVoice(); join(n); };
 }
+// phones only allow speech after a tap: say nothing once while the Join button is pressed
+function unlockVoice() { try { if ('speechSynthesis' in window) { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } } catch (e) {} }
 function endedScreen(text) {
   if (link) link.stopped = true;
   $('#guard').innerHTML = `${header()}<div class="stage center"><div class="card"><h1>⭐ Game over</h1><p>${esc(text)}</p><button class="btn go" id="back" type="button">Back to Grown-ups</button></div></div>`;
@@ -60,7 +66,12 @@ async function join(name) {
 // ------------------------------------------------ playing
 function play() {
   $('#guard').innerHTML = `${header()}
-    <div class="stage" id="stage"><img id="pic" alt="${esc(KID.name)}’s game" draggable="false"><div class="wait" id="wait">⏳ Waiting for ${esc(KID.name)}’s game…</div><div class="dots" id="dots"></div></div>
+    <div class="stage" id="stage"><img id="pic" alt="${esc(KID.name)}’s game" draggable="false"><video id="screen" class="hidden" autoplay playsinline muted></video>
+      <iframe id="mirror" class="hidden" sandbox="allow-same-origin" title="The problem ${esc(KID.name)} sees" tabindex="-1"></iframe>
+      <div class="wait" id="wait">⏳ Waiting for ${esc(KID.name)}’s game…</div><div class="dots" id="dots"></div>
+      <video id="selfcam" class="selfcam hidden" autoplay playsinline muted></video>
+      <div class="kidcam hidden" id="kidcam"><video autoplay playsinline muted></video><img class="hidden" alt=""><span>${esc(KID.name)}</span></div>
+      <div class="answer hidden" id="answer"></div></div>
     <div class="panel">
       <div class="status" id="status"></div>
       <div class="btns2" id="together"></div>
@@ -68,7 +79,6 @@ function play() {
     </div>
     <div class="toast" id="toast"></div>
     <div class="gpill hidden" id="gpill"></div>
-    <video id="selfcam" class="selfcam hidden" autoplay playsinline muted></video>
     <div class="sheet hidden" id="sheet"><div class="sheet-card">
       <div class="sheet-head"><b>💬 Chat with ${esc(KID.name)}</b><button type="button" id="sheetX">✖</button></div>
       <div class="sheet-log" id="sheetLog"></div>
@@ -80,10 +90,11 @@ function play() {
   nm.onclick = () => { if (link) { link.stopped = true; [...link.peers.keys()].forEach(k => link.drop(k)); } nameScreen(); };
   toast(`👋 You joined as ${me.name}!`);
   buttons();
-  const pic = $('#pic');
-  pic.addEventListener('pointerdown', e => {
+  const pic = $('#pic'), scr = $('#screen');
+  const tapPoint = e => {
     e.preventDefault();
-    const r = pic.getBoundingClientRect(), iw = pic.naturalWidth || 16, ih = pic.naturalHeight || 9;
+    const el = screenLive ? scr : pic;
+    const r = el.getBoundingClientRect(), iw = (screenLive ? scr.videoWidth : pic.naturalWidth) || 16, ih = (screenLive ? scr.videoHeight : pic.naturalHeight) || 9;
     const k = Math.min(r.width / iw, r.height / ih), w = iw * k, h = ih * k, x0 = r.left + (r.width - w) / 2, y0 = r.top + (r.height - h) / 2;
     const nx = (e.clientX - x0) / w, ny = (e.clientY - y0) / h;
     if (nx < 0 || nx > 1 || ny < 0 || ny > 1 || !ready('point')) return;
@@ -91,7 +102,10 @@ function play() {
     const d = document.createElement('i'); d.className = 'dot'; d.style.left = (e.clientX - $('#stage').getBoundingClientRect().left) + 'px'; d.style.top = (e.clientY - $('#stage').getBoundingClientRect().top) + 'px'; d.style.setProperty('--c', me.color);
     $('#dots').appendChild(d); setTimeout(() => d.remove(), 1200);
     if (navigator.vibrate) try { navigator.vibrate(20); } catch (er) {}
-  });
+  };
+  pic.addEventListener('pointerdown', tapPoint); scr.addEventListener('pointerdown', tapPoint);
+  scr.addEventListener('playing', () => { screenLive = true; scr.classList.remove('hidden'); pic.classList.add('hidden'); $('#wait').classList.add('hidden'); lastFrameAt = performance.now(); if (link) link.send('host', { t: 'scr', on: true }); });
+  setupMirror();
   $('#sheetX').onclick = () => sheet(false);
   $('#sheet').addEventListener('pointerdown', e => { if (e.target.id === 'sheet') sheet(false); });
   $('#guard').querySelectorAll('[data-e]').forEach(b => b.addEventListener('click', () => { const i = $('#sheetText'); i.value = (i.value + b.dataset.e).slice(0, 200); i.focus(); }));
@@ -103,16 +117,24 @@ function play() {
   link = new CoopLink({
     urls: C.urls, token: me.token, role: 'member', ice: C.ice, media: { audio: F.talk, video: F.video },
     onState, onMsg, onPoll,
-    onTrack: (tk, track) => { if (track.kind === 'audio') player.attach('host', track); },
-    onLink: (tk, open) => { net = open ? 'direct' : 'relay'; netPill(); if (open && cam) link.send('host', { t: 'cam', on: true }); },
+    onTrack: (tk, track, stream, tag) => {
+      if (track.kind === 'audio') player.attach('host', track);
+      else if (tag === 'screen') screenVideo(track);
+      else if (tag === 'cam') kidCam(track);
+    },
+    onLink: (tk, open) => { net = open ? 'direct' : 'relay'; netPill(); if (open && cam) link.send('host', { t: 'cam', on: true }); if (!open) screenOff(); },
     onEnded: () => { stopCam(); if (talk) talk.stop(); endedScreen(`${KID.name} stopped playing. Thanks for playing together!`); },
   });
+  window.__joynotLink = link; // tests
   talk = talker({ link, voiceUrl: C.urls.voice, token: me.token, onTalk: (on, mode) => gpill(on ? (mode === 'clip' ? '🎙️ Recording… let go to send' : `🎙️ ${KID.name} can hear you`) : '', me.color), onError: m => toast('🎙️ ' + m) });
   renderTogether();
   link.start();
   addEventListener('pointerdown', () => player.resume(), { capture: true });
   addEventListener('pagehide', () => link && link.end());
-  setInterval(() => { if (net !== 'connecting' && lastFrameAt && performance.now() - lastFrameAt > 8000) $('#wait').classList.remove('hidden'); }, 2000);
+  setInterval(() => { if (net !== 'connecting' && lastFrameAt && !screenLive && performance.now() - lastFrameAt > 8000) $('#wait').classList.remove('hidden'); }, 2000);
+  // camera through JoyNot when there's no direct link: a small picture about every 1.5 seconds
+  setInterval(() => { if (cam && link && !link.linkOpen('host') && F.video) { const d = camShot(); if (d) link.send('host', { t: 'camf', d }); } }, 1500);
+  addEventListener('pointerdown', () => { [$('#screen'), $('#kidcam video')].forEach(v => { if (v && v.paused && v.srcObject) v.play().catch(() => {}); }); }, { capture: true });
 }
 function netPill() { const el = $('#net'); if (!el) return; el.textContent = net === 'direct' ? '⚡ Direct' : net === 'relay' ? '☁️ Online' : '⏳ Connecting'; }
 function buttons() {
@@ -134,14 +156,77 @@ function onState(s) {
   if (!s || typeof s !== 'object') return;
   st = s;
   if (net === 'connecting' && link && !link.linkOpen('host')) { net = 'relay'; netPill(); }
-  if (s.f) showFrame(s.f);
+  if (s.f && !screenLive) showFrame(s.f);
+  if (s.cam && !kidCamLive && F.video) { const k = $('#kidcam'); k.querySelector('img').src = s.cam; k.querySelector('img').classList.remove('hidden'); k.querySelector('video').classList.add('hidden'); k.classList.remove('hidden'); }
+  showMirror(s.view);
   if (s.features) { const was = F; F = { talk: !!s.features.talk, video: !!s.features.video }; if (was.talk !== F.talk || was.video !== F.video) renderTogether(); }
   $('#status').innerHTML = `${s.level ? `<div class="lv">${esc(s.level)}</div>` : ''}${s.goal ? `<div class="goal">🎯 ${esc(s.goal)}</div>` : ''}${s.screen ? `<div class="scr">📺 ${esc(s.screen)}</div>` : ''}${s.tip ? `<div class="tipbox">💡 <b>Coach tip:</b> ${esc(s.tip)}</div>` : ''}` || `<div class="scr">${esc(KID.name)} is getting ready…</div>`;
   buttons();
 }
 function showFrame(d) {
-  const pic = $('#pic'); if (!pic) return;
+  const pic = $('#pic'); if (!pic || screenLive) return;
   pic.src = d; lastFrameAt = performance.now(); $('#wait').classList.add('hidden');
+}
+// ------------------------------------------------ the live game video (same screen the kid sees)
+function screenVideo(track) {
+  const v = $('#screen'); if (!v) return;
+  v.srcObject = new MediaStream([track]); v.play().catch(() => {});
+  track.onended = screenOff; track.onmute = () => setTimeout(() => { if (track.muted) screenOff(); }, 2500);
+  track.onunmute = () => v.play().catch(() => {});
+}
+function screenOff() {
+  if (!screenLive) return;
+  screenLive = false; const v = $('#screen'); if (v) v.classList.add('hidden'); const p = $('#pic'); if (p) p.classList.remove('hidden');
+  if (link) link.send('host', { t: 'scr', on: false });
+}
+// ------------------------------------------------ the kid's camera (video call)
+function kidCam(track) {
+  const k = $('#kidcam'); if (!k) return;
+  const v = k.querySelector('video'); v.srcObject = new MediaStream([track]); v.play().catch(() => {});
+  const live = () => { kidCamLive = true; v.classList.remove('hidden'); k.querySelector('img').classList.add('hidden'); k.classList.toggle('hidden', !F.video); };
+  v.onplaying = live; track.onunmute = live;
+  track.onmute = () => { kidCamLive = false; };
+  track.onended = () => { kidCamLive = false; k.classList.add('hidden'); };
+}
+function camShot() {
+  const v = $('#selfcam'); if (!v || !v.videoWidth) return null;
+  const c = camShot.c || (camShot.c = document.createElement('canvas')); const k = 160 / v.videoWidth;
+  c.width = 160; c.height = Math.round(v.videoHeight * k);
+  try { c.getContext('2d').drawImage(v, 0, 0, c.width, c.height); return c.toDataURL('image/jpeg', 0.5); } catch (e) { return null; }
+}
+// ------------------------------------------------ the problem card the kid sees, drawn with the game's own styles
+function setupMirror() {
+  const f = $('#mirror'); if (!f) return;
+  f.srcdoc = '<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/fonts/fonts.css"><link id="gcss" rel="stylesheet" href=""><style>html,body{background:transparent!important;overflow:hidden!important;margin:0}#challenge{position:absolute!important;background:rgba(5,2,10,.55)!important}.ch-actions,.x{display:none!important}.pad-mirror{text-align:center;font-size:28px;font-weight:700;color:#ffd84a}.listen-mirror{text-align:center;font-size:20px;color:#7fff9a;font-weight:700}</style></head><body><div id="m"></div></body></html>';
+}
+function showMirror(view) {
+  const f = $('#mirror'); if (!f) return;
+  const ch = view && view.ch;
+  const k = ch ? JSON.stringify(ch) : '';
+  if (k === mirrorKey) return; mirrorKey = k;
+  const a = $('#answer');
+  if (!ch) { f.classList.add('hidden'); a.classList.add('hidden'); return; }
+  const d = f.contentDocument; if (!d || !d.getElementById('m')) { mirrorKey = ''; return; }
+  const css = d.getElementById('gcss'); if (view.css && /^\/games\/[a-z0-9_\/.-]+\.css$/i.test(view.css) && css.getAttribute('href') !== view.css) css.setAttribute('href', view.css);
+  // the card's HTML comes from the kid's game (same family). It shows in a sandboxed frame where no script can run.
+  d.getElementById('m').innerHTML = `<div id="challenge" class="${esc(String(ch.cls || 'overlay').replace(/[^a-z0-9 _-]/gi, ''))}"><div class="panel ch-panel">
+    <div class="ch-head"><span>${esc(ch.title)}</span></div>
+    <div class="ch-sparky"><div class="bubble">${esc(ch.bubble)}</div></div>
+    <div class="ch-body">${ch.content ? `<div class="ch-content">${ch.content}</div>` : ''}${ch.teach ? `<div class="ch-teach">${ch.teach}</div>` : ''}</div>
+    ${ch.typed !== null && ch.typed !== undefined ? `<div class="pad-mirror">${esc(ch.typed) || '…'}</div>` : ''}
+    ${ch.listening ? '<div class="listen-mirror">👂 Listening…</div>' : ''}
+    <div class="heard">${esc(ch.heard)}</div></div></div>`;
+  f.classList.remove('hidden');
+  a.innerHTML = `🔑 Answer (only you see this): <b>${esc(ch.answer)}</b>`; a.classList.remove('hidden');
+}
+// ------------------------------------------------ hear what the kid hears (the game's voice lines)
+function sayHere(b) {
+  if (!hear || !('speechSynthesis' in window) || !b.text) return;
+  try {
+    if (speechSynthesis.pending) speechSynthesis.cancel(); // never fall behind the kid's screen
+    const u = tune(new SpeechSynthesisUtterance(clean(b.text)), { pitch: Math.max(0.5, Math.min(1.6, +b.pitch || 1)), rate: Math.max(0.6, Math.min(1.4, +b.rate || 1)) });
+    speechSynthesis.speak(u);
+  } catch (e) {}
 }
 function onMsg(from, b) {
   if (b.t === 'fr') {
@@ -152,20 +237,23 @@ function onMsg(from, b) {
     return;
   }
   if (b.t === 'chat') { if (!F.talk || seenChat.has(b.id)) return; seenChat.add(b.id); addChat(b, false); return; }
+  if (b.t === 'say') { sayHere(b); return; }
   if (b.t === 'talk' && F.talk) gpill(b.on ? `🎙️ ${KID.name} is talking…` : '', KID.color);
   if (b.t === 'voice' && F.talk) playClip(b.url, () => gpill(`🎙️ ${b.name} is talking…`, KID.color), () => gpill(''));
 }
-function onPoll(j) { if (j.features) { const was = F; F = { talk: !!j.features.talk, video: !!j.features.video }; if (was.talk !== F.talk || was.video !== F.video) { link.setMedia({ audio: F.talk, video: F.video }); if (!F.video) stopCam(); renderTogether(); } } }
+function onPoll(j) { if (j.features) { const was = F; F = { talk: !!j.features.talk, video: !!j.features.video }; if (was.talk !== F.talk || was.video !== F.video) { link.setMedia({ audio: F.talk, video: F.video }); if (!F.video) { stopCam(); $('#kidcam').classList.add('hidden'); } renderTogether(); } } }
 
 // ------------------------------------------------ talk, chat, camera
 function renderTogether() {
   const box = $('#together'); if (!box) return;
-  if (!F.talk && !F.video) { box.innerHTML = '<p class="off">🎙️ Talk, 💬 chat and 📹 video are off. Turn them on in Grown-ups → this game’s settings.</p>'; box.className = 'btns2 none'; if (sheetOpen) sheet(false); return; }
+  const hearBtn = `<button class="btn hear ${hear ? 'on' : ''}" id="hearBtn" type="button" aria-pressed="${hear}">${hear ? '🔊 Hearing game' : '🔇 Game muted'}</button>`;
+  if (!F.talk && !F.video) { box.innerHTML = `${hearBtn}<p class="off">🎙️ Talk, 💬 chat and 📹 video are off. Turn them on in Grown-ups → this game’s settings.</p>`; box.className = 'btns2 none'; if (sheetOpen) sheet(false); bindHear(); return; }
   box.className = 'btns2';
   const mic = canTalk();
   box.innerHTML = `${F.talk ? `<button class="btn talk" id="talkBtn" type="button" ${mic ? '' : 'disabled'}>${mic ? '🎙️ Hold to talk' : '🎙️ Talk needs https'}</button>
     <button class="btn" id="chatBtn" type="button">💬 Chat${unread ? ` <i class="badge">${unread}</i>` : ''}</button>` : ''}
-    ${F.video ? `<button class="btn" id="camBtn" type="button">${cam ? '📹 Camera on' : '📹 Camera'}</button>` : ''}`;
+    ${F.video ? `<button class="btn" id="camBtn" type="button">${cam ? '📹 Camera on' : '📹 Camera'}</button>` : ''}${hearBtn}`;
+  bindHear();
   const tb = $('#talkBtn');
   if (tb && mic) {
     tb.addEventListener('pointerdown', e => { e.preventDefault(); tb.classList.add('down'); talk.down(); });
@@ -174,6 +262,10 @@ function renderTogether() {
   }
   if ($('#chatBtn')) $('#chatBtn').onclick = () => sheet(true);
   if ($('#camBtn')) $('#camBtn').onclick = () => (cam ? stopCam() : startCam());
+}
+function bindHear() {
+  const b = $('#hearBtn'); if (!b) return;
+  b.onclick = () => { hear = !hear; store.set('joynot_hear_game', hear ? 'on' : 'off'); if (!hear && 'speechSynthesis' in window) speechSynthesis.cancel(); renderTogether(); toast(hear ? '🔊 You’ll hear what the game says' : '🔇 Game voice muted on this phone'); };
 }
 function sheet(on) {
   sheetOpen = on; $('#sheet').classList.toggle('hidden', !on);
@@ -199,7 +291,7 @@ async function startCam() {
     const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 240 }, frameRate: { ideal: 15 } }, audio: false });
     cam = s; link.setCam(s.getVideoTracks()[0]); link.send('host', { t: 'cam', on: true });
     const v = $('#selfcam'); v.srcObject = s; v.classList.remove('hidden'); v.play().catch(() => {});
-    toast(`📹 ${KID.name} can see you`);
+    toast(`📹 Video call on: you and ${KID.name} can see each other`);
   } catch (e) { toast('📹 Please allow the camera.'); }
   renderTogether();
 }

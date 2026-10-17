@@ -68,22 +68,28 @@
 </div>
 
 {{-- ================= TITLE ================= --}}
-<div id="title" class="screen hidden">
-    <div class="title-inner">
+{{-- The cast stands on a lit stage behind the menu (drawn on #titleArt in the kid's scare tier: Gentle / Spooky-lite / Spooky). --}}
+<div id="title" class="screen title-screen hidden">
+    <canvas id="titleArt" aria-hidden="true"></canvas>
+    <div class="title-inner title-over">
         <h1 class="logo">Rusty's<br><span>After Hours</span></h1>
-        <canvas id="titleArt" width="480" height="230"></canvas>
+        <div class="tagline">Read · Count · Hide · Build</div>
         <div id="titleName" class="welcome"></div>
         <div class="player-row">
             <span class="kid-chip" style="--c: {{ $kid->color }}"><span>{{ $kid->avatar }}</span>{{ $kid->name }}</span>
             <button id="btnSwitch" class="mid-btn">👥 Switch player</button>
         </div>
-        <div id="titleStats" class="stats"></div>
         <div class="row">
             <button id="btnPlay" class="big-btn">▶ PLAY</button>
+        </div>
+        <div id="titleMode" class="mode-chip"></div>
+        <div id="titleStats" class="stats"></div>
+        <div class="row">
+            <button id="btnVoice" class="mid-btn">🗣️ Voice</button>
             <button id="btnTitleExit" class="mid-btn exit-btn">🏠 Back to games</button>
+            <a class="grownups" href="{{ $joynot['urls']['grownups'] }}">Grown-ups 🔒</a>
         </div>
         <div class="turn-tip">📱↔ Tip: turn your phone sideways for a bigger view!</div>
-        <a class="grownups" href="{{ $joynot['urls']['grownups'] }}">Grown-ups 🔒</a>
     </div>
 </div>
 
@@ -99,9 +105,9 @@
         </div>
         <div class="turn-tip">📱↔ Tip: turn your phone sideways for a bigger view!</div>
         <ul class="howto">
-            <li>🕹️ Drag your thumb on the <b>left side</b> to walk. Touch the <b>right side</b> to point your flashlight.</li>
+            <li>🕹️ Drag your thumb on the <b>left side</b>: up to walk, down to back up, sideways to turn. Drag on the <b>right side</b> to look around.</li>
             <li>📖 🔢 Walk up to a door or gate and tap <b>Read door</b> / <b>Solve gate</b>. Then press <b>TALK</b>.</li>
-            <li>🔦 Shine your light on an animatronic to make it <b>disappear</b>.</li>
+            <li>🔦 Shine your light on an animatronic to make it <b>go away</b>.</li>
             <li>👣 Hear footsteps getting louder? Find a hiding spot and tap <b>HIDE</b>.</li>
         </ul>
     </div>
@@ -143,6 +149,7 @@
         <h2>Paused</h2>
         <button id="btnResume" class="big-btn">▶ Keep Playing</button>
         <button id="btnSteps" class="mid-btn">🔦 Flashlight Steps (problem solving)</button>
+        <button id="btnVoice2" class="mid-btn">🗣️ Voice</button>
         <button id="btnQuit" class="mid-btn">🏠 Main Menu</button>
         <button id="btnPauseExit" class="mid-btn exit-btn">🚪 Exit to JoyNot</button>
     </div>
@@ -154,6 +161,19 @@
         <p class="sub">Use these steps for ANY tricky problem!</p>
         <ol id="stepsList" class="steps-list"></ol>
         <button id="btnStepsClose" class="big-btn">Got it!</button>
+    </div>
+</div>
+
+{{-- Pick the read-aloud voice: any voice installed on this phone / tablet / computer, or the device's own voice --}}
+<div id="voicePick" class="overlay hidden">
+    <div class="panel menu">
+        <h2>🗣️ Voice</h2>
+        <p class="tip" style="font-size:16px">Pick any voice on this device. It's saved on this device.</p>
+        <select id="gVoiceSel" class="voice-sel"></select>
+        <label style="justify-content:center">Speed
+            <select id="gVoiceRate"><option value="0.8">Slower</option><option value="0.9">A bit slower</option><option value="1">Normal</option><option value="1.1">A bit faster</option></select></label>
+        <button id="gVoiceTry" class="mid-btn">▶ Try it</button>
+        <button id="gVoiceDone" class="big-btn">✔ Done</button>
     </div>
 </div>
 

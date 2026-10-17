@@ -16,7 +16,7 @@
             @if (! empty($field['hint']))<span class="hint">{{ $field['hint'] }}</span>@endif
             <select name="{{ $name }}">
                 @foreach ($field['options'] as $value => $text)
-                    <option value="{{ $value }}" @selected((string) ($settings[$name] ?? '') === (string) $value)>{{ $text }}</option>
+                    <option value="{{ $value }}" @selected((string) $settings[$name] === (string) $value)>{{ $text }}</option>
                 @endforeach
             </select>
         </label>

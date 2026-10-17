@@ -154,8 +154,8 @@ abstract class Game
                 'toggle' => true,
             ],
             'video' => [
-                'label' => '📹 Grown-up video bubble',
-                'hint' => 'A small video of the grown-up’s face in the corner of the kid’s game (the kid’s camera is never used). Uses more data and battery.',
+                'label' => '📹 Video call (see each other)',
+                'hint' => 'When a grown-up joins, it’s a video call: the kid sees the grown-up’s face in a bubble, and the grown-up sees the kid. The kid’s device will ask to use its camera. Live only — never recorded. Uses more data and battery.',
                 'options' => ['off' => 'Off', 'on' => 'On'],
                 'default' => 'off',
                 'toggle' => true,

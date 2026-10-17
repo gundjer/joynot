@@ -7,7 +7,9 @@ use App\Models\Kid;
 
 class RustysAfterHours extends Game
 {
-    public const SETTING_DEFAULTS = ['scare' => 'mild', 'monsterSpeed' => 'normal', 'focus' => 'both', 'strict' => 'easy', 'voices' => true, 'talk' => 'off', 'video' => 'off'];
+    // scare: 'auto' follows the kid's grade (Gentle Pre-K–K, Spooky-lite 1st–3rd, Spooky 4th–5th). A grown-up can pick a
+    // lower level, never a higher one. Old values: off → gentle, mild/full → auto.
+    public const SETTING_DEFAULTS = ['scare' => 'auto', 'monsterSpeed' => 'normal', 'focus' => 'both', 'strict' => 'easy', 'voices' => true, 'talk' => 'off', 'video' => 'off'];
 
     public function supportsCoop(): bool
     {
@@ -47,8 +49,8 @@ class RustysAfterHours extends Game
             'night' => (int) ($state['night'] ?? 1),
             'tokens' => (int) ($state['tokens'] ?? 0),
             'nights' => (int) data_get($state, 'stats.nights', 0),
-            // level-up cycle: 0 night → 1 workshop → 2 hallway run → 3 workshop
-            'stage' => (int) ($state['stage'] ?? 0) % 4,
+            // level loop: 0 flashlight night → 1 workshop → 2 hallway run (old saves had a 4th step: a workshop)
+            'stage' => ((int) ($state['stage'] ?? 0)) === 3 ? 1 : ((int) ($state['stage'] ?? 0)) % 3,
             'bots' => count((array) ($state['bots'] ?? [])),
             'runs' => (int) ($state['runs'] ?? 0),
         ];
@@ -158,8 +160,8 @@ class RustysAfterHours extends Game
             '📖 Reading' => "Level {$rl} · ".($reading[$rl][0] ?? '').' (Gr '.($reading[$rl][1] ?? '?').')'.$toGoal($rl, $goal['reading']),
             '🔢 Math' => "Level {$ml} · ".($math[$ml][0] ?? '').' (Gr '.($math[$ml][1] ?? '?').')'.$toGoal($ml, $goal['math']),
             '🌙 Night' => ($s['night'] ?? 1).' · '.($s['nights'] ?? 0).' escaped · ★ '.($s['tokens'] ?? 0),
-            '⭐ Adventures' => 'Next: '.(['🌙 Flashlight night', '🔧 Robot workshop', '🏃 Hallway run', '🔧 Robot workshop'][(int) ($s['stage'] ?? 0) % 4] ?? '🌙 Flashlight night')
-                .' · 🤖 '.($s['bots'] ?? 0).' robots built · 🏃 '.($s['runs'] ?? 0).' hallway runs (a new adventure unlocks on every reading or math level-up)',
+            '⭐ Adventures' => 'Next: '.(['🌙 Flashlight night', '🔧 Robot workshop', '🙈 Hide & Seek'][(int) ($s['stage'] ?? 0) % 3] ?? '🌙 Flashlight night')
+                .' · 🤖 '.($s['bots'] ?? 0).' animatronics built · 🏃 '.($s['runs'] ?? 0).' games of Hide & Seek (loop: night → build an animatronic → it hunts for you → next night)',
         ];
     }
 
@@ -176,7 +178,7 @@ class RustysAfterHours extends Game
             'reading_level' => 'required|integer|min:1|max:'.count($reading),
             'math_level' => 'required|integer|min:1|max:'.count($math),
             'night' => 'required|integer|min:1|max:999',
-            'scare' => 'required|in:off,mild,full',
+            'scare' => 'required|in:auto,gentle,lite,spooky,off,mild,full',
             'monsterSpeed' => 'required|in:slow,normal,fast',
             'focus' => 'required|in:both,reading,math',
             'strict' => 'required|in:easy,normal',
@@ -193,6 +195,7 @@ class RustysAfterHours extends Game
 
         return [
             'settings' => array_merge(self::SETTING_DEFAULTS, $state['settings'] ?? []),
+            'scareMax' => self::scareMaxFor($progress->kid?->grade),
             'rl' => (int) data_get($state, 'reading.level', 1),
             'ml' => (int) data_get($state, 'math.level', 1),
             'night' => (int) ($state['night'] ?? 1),
@@ -201,8 +204,26 @@ class RustysAfterHours extends Game
         ];
     }
 
+    /** Highest scare level for a grade: 0 Gentle (Pre-K, K), 1 Spooky-lite (1st–3rd), 2 Spooky (4th and up). */
+    public static function scareMaxFor(?string $grade): int
+    {
+        if ($grade === null || $grade === '') {
+            return 1;
+        }
+        if (in_array(strtoupper($grade), ['PK', 'K'], true)) {
+            return 0;
+        }
+
+        return ((int) $grade) <= 3 ? 1 : 2;
+    }
+
     public function saveSettings(GameProgress $progress, array $data): void
     {
+        // never above the kid's grade
+        $levels = ['gentle' => 0, 'lite' => 1, 'spooky' => 2];
+        if (isset($levels[$data['scare']]) && $levels[$data['scare']] > self::scareMaxFor($progress->kid?->grade)) {
+            $data['scare'] = 'auto';
+        }
         $state = $progress->state ?? [];
         $nowMs = (int) round(microtime(true) * 1000);
 

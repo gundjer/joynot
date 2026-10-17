@@ -62,7 +62,26 @@ input, select { user-select: text; -webkit-user-select: text; }
 .logo { font-family: 'Creepster', var(--font); font-weight: 400; font-size: clamp(38px, min(11vw, 11vh), 64px); line-height: .95; margin: 0 0 6px; color: #ff6a3d; text-shadow: 0 0 18px #ff2a00, 0 4px 0 #400; letter-spacing: 2px; }
 .logo span { color: var(--gold); text-shadow: 0 0 18px #ff9d00, 0 4px 0 #400; }
 .logo.small { font-size: clamp(34px, min(10vw, 10vh), 56px); }
-#titleArt { width: min(480px, 88vw); height: auto; max-height: 30vh; object-fit: contain; }
+/* title screen: the cast on a lit stage (canvas) behind the menu */
+.title-screen { background: #120d1a; }
+#titleArt { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+.title-over { position: relative; z-index: 1; max-width: min(560px, 46vw); margin: auto; padding: 12px 14px; }
+.title-over .logo { font-size: clamp(42px, min(9vw, 13vh), 92px); color: var(--gold); text-shadow: 0 5px 0 #7a1f2b, 0 10px 24px rgba(0,0,0,.6); }
+.title-over .logo span { color: #f4efe6; font-size: .62em; letter-spacing: 4px; text-shadow: 0 4px 0 #3b332c; }
+.tagline { font-family: Fredoka, var(--font); font-weight: 600; color: #e8dcf5; letter-spacing: 1px; margin: 4px 0 8px; font-size: clamp(14px, 2.6vh, 20px); }
+.title-over .welcome, .title-over .stats { text-shadow: 0 2px 6px #000; }
+.title-over .turn-tip { display: none !important; }
+.title-over .stats { background: rgba(14, 10, 22, .62); border-radius: 14px; padding: 6px 10px; margin: 8px auto 6px; max-width: 520px; font-size: clamp(13px, min(3.2vw, 3.4vh), 17px); }
+.mode-chip { display: inline-flex; align-items: center; gap: 8px; padding: 5px 14px; border-radius: 20px; background: rgba(20, 14, 28, .8); font-family: Fredoka, var(--font); font-weight: 600; font-size: clamp(13px, 2.4vh, 16px); color: #f4efe6; }
+.mode-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--gold); display: inline-block; }
+body[data-tier="gentle"] .mode-dot { background: #7ed957; }
+body[data-tier="spooky"] .mode-dot { background: #ff4d4d; }
+#btnPlay { font-family: Fredoka, var(--font); font-size: clamp(22px, min(6vw, 6.4vh), 36px); padding: .45em 1.4em; border-radius: 999px; }
+@media (max-aspect-ratio: 21/20) {
+  /* tall screens: the cast stands in a row along the bottom, the menu sits above them */
+  .title-screen { align-items: flex-start; }
+  .title-over { max-width: 600px; margin: 0 auto; padding-top: max(10px, 2vh); padding-bottom: 30vh; }
+}
 .welcome { font-size: clamp(18px, min(4.5vw, 5vh), 26px); margin: 4px 0; }
 .stats { font-size: clamp(14px, min(3.6vw, 4vh), 20px); color: var(--muted); margin-bottom: 14px; line-height: 1.6; }
 .stats b { color: var(--ink); }
@@ -95,6 +114,8 @@ input, select { user-select: text; -webkit-user-select: text; }
 .steps-list .si { font-size: 1.6em; }
 .sub { color: var(--muted); margin: 0 0 6px; font-size: clamp(13px, 3.4vh, 18px); }
 #scare { position: fixed; inset: 0; z-index: 50; width: 100%; height: 100%; }
+#voicePick { z-index: 40; }
+#voicePick .voice-sel { font-size: 16px; padding: 10px; border-radius: 12px; background: #0f0a18; color: #fff; border: 2px solid #4b3a6b; font-family: var(--font); width: 100%; margin: 4px 0 8px; }
 
 /* ---------- challenge panel ----------
    The panel never gets taller than the screen. The middle part scrolls if it has to,

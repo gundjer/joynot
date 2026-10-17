@@ -1,10 +1,14 @@
 // Animatronic brains: wander, hear/see you, hunt, search, get zapped by the flashlight.
+// A robot the kid built can be a monster too (the "Find Me!" level): new Monster('bot', x, y, { bot, vision, hear, speedK }).
+//   vision: how far it sees you (its Glow eyes power) · hear: how far it hears your footsteps (Big ears) · speedK: Speed.
 import { CHARACTERS } from './characters.js';
 import { findPath, lineOfSight, passableForMonster } from './world.js';
 
 export class Monster {
-  constructor(id, x, y) {
-    this.id = id; this.c = CHARACTERS[id];
+  constructor(id, x, y, o = {}) {
+    this.id = id; this.bot = o.bot || null;
+    this.c = this.bot ? { id: 'bot', name: this.bot.name, pitch: 1.1, rate: 0.95, voice: 'bright', heavy: 0.85 } : CHARACTERS[id];
+    this.vision = o.vision ?? null; this.hear = o.hear ?? null; this.speedK = o.speedK ?? 1;
     this.x = x; this.y = y; this.state = 'wander'; this.path = []; this.repath = 0;
     this.glare = 0; this.goneUntil = 0; this.vanishT = 0; this.stepT = 0; this.talkT = 6 + Math.random() * 8;
     this.moving = false; this.lastSeen = null; this.lostT = 0; this.alpha = 1; this.t = Math.random() * 10;
@@ -32,8 +36,14 @@ export class Monster {
     const graceOver = g.time > g.graceUntil;
     let sees = false;
     if (graceOver && !p.hidden) {
-      const visionR = g.lightOn ? 8 : 5;
+      const visionR = this.vision !== null ? this.vision + (g.lightOn ? 1.5 : 0) : (g.lightOn ? 8 : 5);
       if ((d < visionR && lineOfSight(w, this.x, this.y, p.x, p.y)) || d < 2.2) sees = true;
+    }
+    // big ears: hears your footsteps (not when you stand still or hide) and comes to look where you were
+    if (!sees && graceOver && this.hear && g.moving && !p.hidden && d < this.hear && this.state === 'wander') {
+      this.state = 'search'; this.lastSeen = { x: p.x, y: p.y };
+      this.path = findPath(w, this.x, this.y, p.x, p.y) || [];
+      g.onMonsterHears && g.onMonsterHears(this);
     }
 
     if (sees) {
@@ -59,7 +69,7 @@ export class Monster {
     }
 
     // move
-    const base = this.state === 'hunt' ? g.huntSpeed : this.state === 'search' ? g.huntSpeed * 0.8 : g.wanderSpeed;
+    const base = (this.state === 'hunt' ? g.huntSpeed : this.state === 'search' ? g.huntSpeed * 0.8 : g.wanderSpeed) * this.speedK;
     let step = base * dt; this.moving = false;
     while (step > 0 && this.path.length) {
       const [tx, ty] = this.path[0];
