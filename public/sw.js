@@ -1,6 +1,6 @@
 // JoyNot service worker: lets the site install as an app and keeps game files loading on spotty Wi-Fi.
 // Pages and saves always go to the server. Game files: network first, cached copy when offline.
-const CACHE = 'joynot-v13';
+const CACHE = 'joynot-v14';
 // Every game file, so games keep loading on spotty Wi-Fi (about 3 MB). Regenerate this list when files are added.
 const ASSETS = [
   '/css/joynot.css',
@@ -206,7 +206,7 @@ const ASSETS = [
 
 self.addEventListener('install', e => {
   // cache each file on its own so one missing file doesn't stop the rest
-  e.waitUntil(caches.open(CACHE).then(c => Promise.all(ASSETS.map(a => c.add(a).catch(() => {})))).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(CACHE).then(c => Promise.all(ASSETS.map(a => c.add(new Request(a, { cache: 'reload' })).catch(() => {})))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
@@ -220,11 +220,12 @@ self.addEventListener('fetch', e => {
 
   // A game page (e.g. /play/clock-shop/3): network first, last copy if offline
   const isPlayPage = req.mode === 'navigate' && /^\/play\/[^/]+\/\d+$/.test(url.pathname);
-  const isStatic = /^\/(games|css|icons|fonts)\//.test(url.pathname) || /^\/(favicon\.(ico|svg)|manifest\.json)$/.test(url.pathname);
+  const isStatic = /^\/(games|css|js|icons|fonts)\//.test(url.pathname) || /^\/(favicon\.(ico|svg)|manifest\.json)$/.test(url.pathname);
   if (!isPlayPage && !isStatic) return; // everything else: straight to the server
 
   e.respondWith(
-    fetch(req).then(res => { if (res.ok && !res.redirected) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); } return res; })
+    // cache: 'no-cache' asks the server if the file changed, so phones never keep running an old copy
+    fetch(req, { cache: 'no-cache' }).then(res => { if (res.ok && !res.redirected) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); } return res; })
       .catch(() => caches.match(req, { ignoreSearch: true }).then(hit => hit || Response.error()))
   );
 });

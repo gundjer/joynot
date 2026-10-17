@@ -244,7 +244,44 @@
 
 <canvas id="scare" class="hidden"></canvas>
 
-<script>window.JOYNOT = @json($joynot);</script>
-<script type="module" src="/games/rustys-after-hours/js/game.js?v={{ $game->version() }}"></script>
+@php
+    // Every game file gets ?v=<last changed time>, so phones and tablets never mix an old cached file with new ones.
+    $jsMap = [];
+    foreach (['games/rustys-after-hours/js', 'games/_play', 'js'] as $dir) {
+        foreach (glob(public_path($dir) . '/*.js') ?: [] as $file) {
+            $jsMap['/' . $dir . '/' . basename($file)] = '/' . $dir . '/' . basename($file) . '?v=' . filemtime($file);
+        }
+    }
+    $gameJs = $jsMap['/games/rustys-after-hours/js/game.js'] ?? '/games/rustys-after-hours/js/game.js?v=' . $game->version();
+@endphp
+<script type="importmap">{!! json_encode(['imports' => $jsMap], JSON_UNESCAPED_SLASHES) !!}</script>
+<script>
+window.JOYNOT = @json($joynot);
+// If the game can't start (an old file stuck on the device, or an error), show a Try again button instead of loading forever.
+(function () {
+    var shown = false;
+    function stuck(msg) {
+        if (shown || window.__rustyStarted) return; shown = true;
+        var box = document.querySelector('#loading .title-inner'); if (!box) return;
+        var p = document.createElement('p'); p.className = 'sub'; p.style.cssText = 'margin-top:14px;font-size:15px;opacity:.85';
+        p.textContent = 'The game is taking too long to start.';
+        var b = document.createElement('button'); b.className = 'big-btn'; b.style.marginTop = '14px'; b.textContent = '🔄 Try again';
+        b.onclick = function () {
+            b.disabled = true; b.textContent = 'Loading...';
+            var done = function () { location.replace(location.pathname + '?r=' + Date.now()); };
+            var jobs = [];
+            try { if (window.caches) jobs.push(caches.keys().then(function (k) { return Promise.all(k.map(function (n) { return caches.delete(n); })); })); } catch (e) {}
+            try { if (navigator.serviceWorker) jobs.push(navigator.serviceWorker.getRegistrations().then(function (r) { return Promise.all(r.map(function (x) { return x.unregister(); })); })); } catch (e) {}
+            Promise.all(jobs).then(done, done); setTimeout(done, 2500);
+        };
+        box.appendChild(p); box.appendChild(b);
+        if (msg) { var d = document.createElement('p'); d.style.cssText = 'margin-top:10px;font-size:11px;opacity:.5;max-width:90vw;word-break:break-word'; d.textContent = msg; box.appendChild(d); }
+    }
+    window.addEventListener('error', function (e) { if (!window.__rustyStarted) setTimeout(function () { stuck(String(e.message || 'error')); }, 1500); });
+    window.addEventListener('unhandledrejection', function (e) { if (!window.__rustyStarted) setTimeout(function () { stuck(String((e.reason && e.reason.message) || e.reason || 'error')); }, 1500); });
+    setTimeout(function () { stuck(''); }, 15000);
+})();
+</script>
+<script type="module" src="{{ $gameJs }}"></script>
 </body>
 </html>

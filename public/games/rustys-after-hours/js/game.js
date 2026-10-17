@@ -86,11 +86,13 @@ window.addEventListener('load', async () => {
 
 async function boot() {
   mode = 'loading';
-  const { offline } = (await store.load()) || {};
+  let offline = false;
+  try { ({ offline } = (await store.load()) || {}); } catch (e) { console.warn('load', e); offline = true; }
   if ((store.data.stage | 0) > 2) { store.data.stage = 1; } // old 4-step loop → workshop
-  applyTier();
-  await Promise.race([Art.whenReady(), new Promise(r => setTimeout(r, 2500))]);
-  refreshTitle(); hide('loading'); show('title'); mode = 'title';
+  try { applyTier(); } catch (e) { console.warn('tier', e); }
+  try { await Promise.race([Art.whenReady(), new Promise(r => setTimeout(r, 2500))]); } catch (e) { console.warn('art', e); }
+  try { refreshTitle(); } catch (e) { console.warn('title', e); }
+  hide('loading'); show('title'); mode = 'title'; window.__rustyStarted = true;
   if (offline) toast('📶 No internet right now. Progress saves on this device for now.', 4000);
 }
 
