@@ -21,7 +21,7 @@ export const Voice = {
       u.onend = finish; u.onerror = finish;
       this.speaking = true;
       // Chrome on Android sometimes drops an utterance spoken right after cancel()
-      setTimeout(() => { try { speechSynthesis.speak(u); } catch (e) { finish(); } }, 60);
+      setTimeout(() => { if (id !== this._id || (!this.enabled && !opts.force)) { finish(); return; } try { speechSynthesis.speak(u); } catch (e) { finish(); } }, 60);
     });
   },
   stop() { this._id++; try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch (e) {} this.speaking = false; },

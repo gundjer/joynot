@@ -1,0 +1,17 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {MISSIONS,part,blueprint} from '../public/games/gizmo-garage/jobs.js';
+import {createRun,advance,supportingStrands,step} from '../public/games/gizmo-garage/mechanics.js';
+import {createGarage,command,cost} from '../public/games/gizmo-garage/garage.js';
+import {referenceBuild} from './fixtures/gizmo-builds.js';
+test('Help pause is idempotent across delayed snapshots and holds from all operators',()=>{const s=createGarage();command(s,{action:'test'});command(s,{action:'operate',on:true},{id:'grandma',name:'Grandma'});command(s,{action:'pause',paused:true});assert.equal(s.phase,'paused');assert.deepEqual(s.operators,{});command(s,{action:'pause',paused:true});assert.equal(s.phase,'paused');command(s,{action:'pause'});assert.equal(s.phase,'run');});
+test('cart scrapes without wheels and rolls with a wheel-and-axle build',()=>{const j=MISSIONS[0],empty=blueprint(j);empty.parts.push(part('piston',1,.6,{id:'push'}));const a=createRun(j,empty);a.operating=true;advance(a,3);assert(a.body.x<2.1);const b=createRun(j,referenceBuild(j));b.operating=true;advance(b,2);assert(b.body.x>3);b.brake=true;advance(b,.5);assert(Math.abs(b.body.vx)<.1);});
+test('meshing gears transfer rotation, while an open gap does not',()=>{const j=MISSIONS[6],a=createRun(j,blueprint(j));a.operating=true;advance(a,6);assert.equal(a.parts.find(p=>p.kind==='fan').w,0);const b=createRun(j,referenceBuild(j));b.operating=true;advance(b,10);assert(b.win);assert(b.parts.find(p=>p.kind==='fan').w>j.target);});
+test('a four-strand pulley can lift a load that the direct crank cannot',()=>{const j=MISSIONS[8],b=referenceBuild(j),r=createRun(j,b);assert(supportingStrands(r)>3.8);r.operating=true;advance(r,25);assert(r.body.y>j.target-.1,JSON.stringify({y:r.body.y,w:r.parts[0].w,t:r.tension,e:r.energy}));assert(r.energy>=j.mass*9.81*(r.body.y-.5)*.95);const a=createRun(j,{...b,rope:['winch',b.rope[1],'load']});a.operating=true;advance(a,10);assert(a.body.y<1);});
+test('screw motion lifts a wedge-driven door continuously',()=>{const j=MISSIONS[9],r=createRun(j,referenceBuild(j));r.operating=true;advance(r,15);assert(r.door>.3);assert(r.energy>j.mass*9.81*r.door*.8);});
+test('independent family edits succeed and conflicting leases/old edits are rejected',()=>{const s=createGarage(),a={id:'a',name:'Grandma'},b={id:'b',name:'Dad'};const result=command(s,{action:'place',kind:'wheel',x:2,y:.3},a,100);assert(result.ok);assert(command(s,{action:'lock',id:result.id},a,101).ok);assert.equal(command(s,{action:'move',id:result.id,x:3,y:.3},b,102).ok,false);assert(command(s,{action:'place',kind:'piston',x:1,y:.5},b,103).ok);assert(command(s,{action:'move',id:result.id,x:3,y:.3,partRev:0},a,104).ok);assert.equal(command(s,{action:'move',id:result.id,x:4,y:.3,partRev:0},a,105).ok,false);assert(cost(s)<=s.job.budget);});
+
+
+
+
+test('every grade has physically reachable jobs within the parts and energy budgets',()=>{for(const j of MISSIONS){const build=referenceBuild(j),r=createRun(j,build),s=createGarage(j);s.blueprint=build;assert(cost(s)<=j.budget,j.id+' budget');for(let i=0;i<240*100&&!r.win;i++){r.operating=true;if(j.kind==='cart'&&r.body.x>=j.target-1)r.brake=true;if(['pulley','compound'].includes(j.kind)&&r.body.y>=j.target)r.brake=true;step(r);}assert(r.win,j.id+' must be reachable');assert(!j.energy||r.energy<=j.energy,j.id+' energy');}});

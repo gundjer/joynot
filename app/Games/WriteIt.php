@@ -2,15 +2,15 @@
 
 namespace App\Games;
 
-/** Write It! — handwriting with a finger, mouse or stylus. Levels must match public/games/{key}/game.js */
+/** Quillbound — handwriting, sentence spells and story scrolls. The saved write-it key stays compatible. */
 class WriteIt extends LearningGame
 {
     public const TRACK = 'writing';
-    public const SKILL = ['✏️', 'Handwriting'];
+    public const SKILL = ['✏️', 'Writing'];
     public const GRADE_FROM = 'reading';
-    public const TOKEN = ['🖍️', 'crayons'];
+    public const TOKEN = ['🪙', 'gold tokens'];
     public const PLAY = true;
-    public const COLORS = ['bg1' => '#eef6ff', 'bg2' => '#fff2e6', 'accent' => '#3a7bd5', 'accent-d' => '#2858a0', 'soft' => '#e2edff'];
+    public const COLORS = ['bg1' => '#f7efdc', 'bg2' => '#e6eee2', 'accent' => '#4b8078', 'accent-d' => '#315b59', 'soft' => '#e1ebdf'];
 
     public const LEVELS = [
         1 => ['Lines & Shapes', 'K'],
@@ -21,7 +21,8 @@ class WriteIt extends LearningGame
         6 => ['Lowercase: Magic C Letters', '1'],
         7 => ['All Lowercase Letters', '1-2'],
         8 => ['Words', '2'],
-        9 => ['Names & Sentences', '2-3'],
+        9 => ['Sentence Spells', '2-3'],
+        10 => ['Story Scrolls & Paragraphs', '3'],
     ];
 
     public function extraSettings(): array

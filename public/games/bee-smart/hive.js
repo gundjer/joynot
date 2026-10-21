@@ -10,10 +10,10 @@ const font = (px, w = 700) => `${w} ${Math.round(px)}px Fredoka, Andika, system-
 /** o: { world, pollen, bonus, bee (extra.bee save), guards: () => n, onDone(summary), onCard(kind, id) } */
 export function makeHive(api, o) {
   const B = o.bee;
-  const n = clamp(o.pollen, 1, 14);
-  const H = { step: 'deposit', t: 0, cells: Array.from({ length: n }, () => ({ s: 0 })), fan: 0, hits: [], msg: '', built: null, earned: 0 };
+  const n = clamp(o.nectar || o.pollen, 1, 14);
+  const H = { step: 'deposit', t: 0, cells: Array.from({ length: n }, () => ({ s: 0 })), fan: 0, warmth: 0, fed: 0, feedNeed: Math.min(3,o.pollen), hits: [], msg: '', built: null, earned: 0 };
   const honeyPer = 3;
-  H.earned = o.pollen * honeyPer + (o.bonus || 0);
+  H.earned = n * honeyPer + (o.bonus || 0);
 
   // which fact this visit (rotates through this world's facts, then any fact)
   const per = Math.ceil(HIVE_FACTS.length / 6), start = o.world.id * per;
@@ -25,13 +25,15 @@ export function makeHive(api, o) {
 
   const say = (t, icon = '🐝') => { api.chime(t, icon, { ms: 6000 }); };
   const go = step => {
-    H.step = step; H.t = 0;
-    if (step === 'deposit') { say(`Welcome home! Tap each empty cell to drop off your nectar. You brought <b>${o.pollen}</b> loads.`, '🍯'); api.actions([]); }
+    H.step = step; H.t = 0; H.hold = false;
+    if (step === 'deposit') { say(`Welcome home! Count as you fill <b>${n}</b> nectar cells. You also brought <b>${o.pollen}</b> pollen loads for the baby bees.`, '🍯'); api.actions([]); }
     if (step === 'fan') { say('Nectar is watery. Bees fan their wings to dry it into thick honey. <b>Hold</b> the fan button!', '🌀'); api.actions([]); }
     if (step === 'cap') { api.actions([]); say('It’s honey now! Bees seal each cell with wax so the honey keeps. Tap each cell to cap it.', '🕯️'); }
+    if (step === 'feed') { api.actions([]); say('Nectar provides energy. Pollen provides protein and fat for growing larvae. Help the nurse bees deliver pollen food to the babies.', '🐝'); }
+    if (step === 'winter') { api.actions([]); say('Prepare for winter! Workers cluster around the queen and vibrate their flight muscles to stay warm. Hold the warm-cluster button. One honey drop will fuel your winter practice.', '🍯'); }
     if (step === 'fact') { say(`<b>${fact[0]}</b>: ${fact[1]}`, '📖'); B.factI[o.world.id] = fi + 1; o.onCard('fact', factId); }
     if (step === 'build') {
-      B.honey = (B.honey || 0) + H.earned; B.honeyAll = (B.honeyAll || 0) + H.earned;
+      if(!H.credited){H.credited=true;B.honey = (B.honey || 0) + H.earned; B.honeyAll = (B.honeyAll || 0) + H.earned;}
       const next = ROOMS.find(r => !(B.rooms || []).includes(r.id));
       say(next ? (B.honey >= next.cost ? `You have <b>${B.honey}</b> honey. You can build the <b>${next.name}</b>!` : `You have <b>${B.honey}</b> honey. The <b>${next.name}</b> needs ${next.cost}. Keep collecting!`) : `You have <b>${B.honey}</b> honey. Your hive is complete. Amazing!`, '🍯');
     }
@@ -46,6 +48,10 @@ export function makeHive(api, o) {
       if (holding) H.fan = Math.min(1, H.fan + dt * (0.33 + 0.12 * helpers));
       else if (helpers && o.guardFanning && o.guardFanning()) H.fan = Math.min(1, H.fan + dt * 0.12 * helpers);
       if (H.fan >= 1) { Sfx.correct(); H.cells.forEach(c => { c.s = 2; }); go('cap'); }
+    }
+    if (H.step === 'winter' && (H.hold || api.input.held('action'))) {
+      H.warmth = Math.min(1,H.warmth+dt*.3);
+      if(H.warmth>=1 && !H.winterPaid){H.winterPaid=true;H.earned=Math.max(0,H.earned-1);B.winterFuel=(B.winterFuel||0)+1;go('fact');}
     }
   }
 
@@ -70,21 +76,32 @@ export function makeHive(api, o) {
     ctx.globalAlpha = 0.18; for (let y = 0; y < Hh + 60; y += 52) for (let x = 0; x < W + 60; x += 60) hex(ctx, x + (Math.floor(y / 52) % 2) * 30, y, 30, '#ffe9a8', '#b98000'); ctx.globalAlpha = 1;
     // busy bees
     for (let i = 0; i < 5; i++) emoji(ctx, '🐝', (W * (0.15 + i * 0.18) + Math.sin(H.t * 1.3 + i) * 30) % W, top + 40 + (i % 2) * 20 + Math.cos(H.t * 2 + i) * 10, 26);
+    const physical = o.renderer?.hive(ctx,W,Hh,top,H.cells,H.fan,H.step);
     // title
-    const titles = { deposit: '🍯 Drop off the nectar', fan: '🌀 Fan your wings', cap: '🕯️ Cap the honey with wax', fact: '📖 Hive fact', build: '🔨 Build your hive' };
+    const titles = { deposit: '🍯 Drop off the nectar', fan: '🌀 Fan your wings', cap: '🕯️ Cap the honey with wax', feed: 'Pollen for the growing bees', winter: 'Warm the winter cluster', fact: '📖 Hive fact', build: '🔨 Build your hive' };
     ctx.fillStyle = INK; ctx.font = font(W < 500 ? 20 : 26); ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(titles[H.step], W / 2, top + 8);
-    const cells = comb(W, Hh, top);
+    const cells = physical || comb(W, Hh, top);
     if (H.step === 'deposit' || H.step === 'fan' || H.step === 'cap') {
       for (const k of cells) {
         const s = k.c.s;
         const col = s === 0 ? (Math.sin(H.t * 5) > 0 ? '#fff6d0' : '#fff') : s === 1 ? `rgba(255,${230 - H.fan * 60},${150 - H.fan * 120},1)` : s === 2 ? '#e99a00' : '#f6efe0';
-        hex(ctx, k.x, k.y, k.r, col);
-        if (s === 3) { ctx.strokeStyle = '#d8c7a0'; ctx.lineWidth = 2; for (let i = -2; i <= 2; i++) { ctx.beginPath(); ctx.moveTo(k.x - k.r * 0.6, k.y + i * k.r * 0.22); ctx.lineTo(k.x + k.r * 0.6, k.y + i * k.r * 0.22); ctx.stroke(); } }
+        if(!physical)hex(ctx, k.x, k.y, k.r, col);
+        if (s === 3 && !physical) { ctx.strokeStyle = '#d8c7a0'; ctx.lineWidth = 2; for (let i = -2; i <= 2; i++) { ctx.beginPath(); ctx.moveTo(k.x - k.r * 0.6, k.y + i * k.r * 0.22); ctx.lineTo(k.x + k.r * 0.6, k.y + i * k.r * 0.22); ctx.stroke(); } }
         if (s === 0 && H.step === 'deposit') { emoji(ctx, '👆', k.x + 6, k.y + 10, k.r * 0.7, { alpha: 0.35 + 0.3 * Math.sin(H.t * 6) }); }
         const hit = { x: k.x - k.r, y: k.y - k.r, w: k.r * 2, h: k.r * 2 };
         H.hits.push({ r: hit, fn: () => tapCell(k.c) });
         k.c.r = hit;
       }
+      ctx.font=font(16);ctx.fillStyle='#fff3cf';ctx.textAlign='center';ctx.fillText(`Filled ${H.cells.filter(c=>c.s>0).length} of ${n} · count each group of five`,W/2,top+47);
+    }
+    if(H.step==='feed'){
+      ctx.fillStyle='#fff3d8';ctx.textAlign='center';ctx.font=font(18);ctx.fillText(`Nurse bees fed ${H.fed} of ${H.feedNeed} larvae`,W/2,top+56);
+      const w=Math.min(240,W-40),r={x:W/2-w/2,y:Hh-100,w,h:58};btn(ctx,r,'Deliver pollen food', '#fff0be',18);
+      H.hits.push({r,fn:()=>{H.fed++;Sfx.drop();if(H.fed>=H.feedNeed){B.larvaeFed=(B.larvaeFed||0)+H.fed;go('winter');}}});
+    }
+    if(H.step==='winter'){
+      ctx.font=font(W<500?14:18);ctx.fillStyle='#fff0c9';ctx.textAlign='center';ctx.fillText(`Cluster warmth ${Math.round(H.warmth*100)}% · honey is winter fuel`,W/2,top+56);
+      const w=Math.min(260,W-40),r={x:W/2-w/2,y:Hh-100,w,h:58};btn(ctx,r,H.hold?'Warming the cluster…':'Hold to warm cluster','#fff0be',18);H.warmBtn=r;
     }
     if (H.step === 'fan') {
       const bw = Math.min(W - 60, 420), r = { x: W / 2 - bw / 2, y: Hh - 120, w: bw, h: 22 };
@@ -126,7 +143,7 @@ export function makeHive(api, o) {
   }
   function tapCell(c) {
     if (H.step === 'deposit' && c.s === 0) { c.s = 1; Sfx.drop(); if (H.cells.every(x => x.s >= 1)) setTimeout(() => go('fan'), 500); }
-    else if (H.step === 'cap' && c.s === 2) { c.s = 3; Sfx.pop(); if (H.cells.every(x => x.s === 3)) { Sfx.correct(); setTimeout(() => go('fact'), 600); } }
+    else if (H.step === 'cap' && c.s === 2) { c.s = 3; Sfx.pop(); if (H.cells.every(x => x.s === 3)) { Sfx.correct(); setTimeout(() => go('feed'), 600); } }
   }
   function build(rm) {
     B.honey -= rm.cost; B.rooms = (B.rooms || []).concat(rm.id); B.hats = (B.hats || []).concat(rm.hat); B.hat = rm.hat;
@@ -139,6 +156,7 @@ export function makeHive(api, o) {
   return {
     H, update, draw,
     tap(x, y) {
+      if(H.step==='winter'&&H.warmBtn){const r=H.warmBtn;if(x>=r.x&&x<=r.x+r.w&&y>=r.y&&y<=r.y+r.h){H.hold=true;return;}}
       if (H.step === 'fan' && H.fanBtn) { const r = H.fanBtn; if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) { H.hold = true; return; } }
       for (let i = H.hits.length - 1; i >= 0; i--) { const r = H.hits[i].r; if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) { H.hits[i].fn(); return; } }
     },

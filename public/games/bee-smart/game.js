@@ -16,6 +16,9 @@ import { WHY, DANGERS, FLOWERS, CRITTERS, REAL_LIT } from './facts.js';
 import { makeHive } from './hive.js';
 import { makeGuide } from './guide.js';
 import { coopHost } from './coop.js';
+import { Meadow3D, flowerHeight } from './meadow3d.js';
+import { createFlight, updateFlight, sipNectar } from './flight.js';
+import { flightControls } from './flight-controls.js';
 
 const INK = '#2b2350';
 const font = (px, w = 700) => `${w} ${Math.round(px)}px Fredoka, Andika, system-ui, sans-serif`;
@@ -25,6 +28,15 @@ const arr = v => (Array.isArray(v) ? v : []);
 
 function createGame(api) {
   let S = null, t = 0, fid = 1;
+  const meadow = new Meadow3D();
+  const brand=document.createElement('div');brand.className='buzz-title-brand';brand.innerHTML='<img src="/icons/logo.svg" width="38" height="38" alt=""><b>Joy<span>Not</span></b>';
+  document.getElementById('pg-title')?.prepend(brand);
+  const controls = flightControls(api, action => {
+    if (!S || S.mode !== 'field' || api.paused) return;
+    if (action === 'home') { S.returning = true; S.bee.tx = HIVE.x; S.bee.ty = HIVE.y; S.bee.targetAltitude = 1.2; api.toast('Follow the hive marker. Your flight timer pauses during puzzles.'); return; }
+    const key = action === 'view' ? 'firstPerson' : action;
+    S.vision[key] = !S.vision[key]; B().vision = { ...S.vision }; save();
+  });
   const coop = coopHost(api, {
     state: () => S, shoo, plant, gold, hint: () => S && S.chal && S.chal.hint(), cheer,
     joined: g => { chime(`🐝 <b>${g.name}</b> joined your hive!`, '🐝', { ms: 5000 }); Sfx.levelUp(); refreshActions(); },
@@ -85,7 +97,9 @@ function createGame(api) {
       flowers: [], done: 0, pollen: 0, nLit: 0, nMath: 0, chal: null, cam: { x: HIVE.x + 200, y: HIVE.y }, hz: makeHazards(w, o.boss), hiveMsgT: 0,
       friends: [{ k: 'ladybug', e: '🐞', x: rand(500, WW - 200), y: rand(150, WH - 150), vx: 20, vy: 10 }, { k: 'butterfly', e: '🦋', x: rand(500, WW - 200), y: rand(150, WH - 150), vx: -30, vy: 15 }],
       stolen: 0, firstFruit: !B().cards.flowers.fruit, guards: [],
+      nectar: 0, flight: createFlight(w.need), vision: { uv: true, compound: false, firstPerson: false, ...B().vision }, returning: false,
     };
+    S.bee.altitude = 1.55;
     while (S.flowers.filter(f => f.st === 'open').length < S.need + 3) addFlower();
     daily();
     if (S.o.boss || !B().intro[w.id]) { S.mode = 'intro'; S.introBtn = null; speakIntro(); }
@@ -226,14 +240,14 @@ function createGame(api) {
   }
   function pollinate(f, it) {
     const b = B(), p = f.gold ? 2 : 1;
-    f.st = 'done'; f.fruit = pick(S.world.fruit); f.grow = 0;
-    S.done++; S.pollen += p;
+    f.st = 'done'; f.fruit = f.e==='🌸' && S.world.id===1 ? pick(['🍎','🍒']) : '🌱'; f.grow = 0;
+    S.done++; S.pollen += p; S.nectar += p + 1; sipNectar(S.flight);
     b.cards.flowers[f.e] = 1;
     dailyHit(f, it);
     Sfx.coin(); api.confetti();
     const name = (FLOWERS[f.e] || ['flower'])[0].toLowerCase();
     let line = `🌟 You pollinated the ${name}! +${p} pollen${f.gold ? ' ✨' : ''}.`;
-    if (S.firstFruit) { S.firstFruit = false; b.cards.flowers.fruit = 1; line += ` Pollinated flowers grow into fruit, like this ${f.fruit}!`; }
+    if (S.firstFruit) { S.firstFruit = false; b.cards.flowers.fruit = 1; line += ' Moving pollen between flowers helps plants make seeds. Fruit-tree blossoms can grow into fruit!'; }
     else if (Math.random() < 0.45) line += ' 🌍 ' + (it.fam === 'math' ? realMath(it.real) : (REAL_LIT[it.lvl] || ['', ''])[1]);
     S.mode = 'field'; fieldActions();
     api.chime(line, '🐝', { ms: 6500 });
@@ -282,15 +296,17 @@ function createGame(api) {
 
   // ------------------------------------------------ hive
   function goHive() {
+    if (!S || S.mode === 'hive') return;
+    if (S.pollen <= S.stolen) { api.toast('Visit a flower first. Your hive’s saved honey is safe.'); return; }
     const b = B();
     S.mode = 'hive'; api.progress(null);
     api.goal('🍯 <b>Inside the hive</b>', { speak: false });
     const bonus = S.daily && S.daily.done && !S.daily.paid ? 10 : 0; if (bonus) S.daily.paid = true;
     S.hive = makeHive(api, {
-      world: S.world, pollen: Math.max(1, S.pollen - S.stolen), bonus, bee: b, save,
+      world: S.world, pollen: S.pollen - S.stolen, nectar: S.nectar, bonus, bee: b, save, renderer: meadow,
       guards: () => coop.count(), guardFanning: () => coop.fanning(),
       onCard: (kind, id) => { b.cards[kind === 'fact' ? 'facts' : kind][id] = 1; save(); },
-      onDone: ({ earned }) => { b.trips++; api.score(`🍯 ${b.honey}`); save(); api.finish({ win: true, title: '🍯 Honey made!', text: `You pollinated ${S.done} flowers and made ${earned} honey for the hive.` }); },
+      onDone: ({ earned }) => { b.trips++; api.score(`🍯 ${b.honey}`); save(); api.finish({ win: S.done>=S.need, title: S.done>=S.need?'🍯 Honey made!':'Safe return!', text: `You pollinated ${S.done} flowers and made ${earned} honey for the hive.` }); },
     });
     coop.event({ t: 'hive' });
     save();
@@ -298,8 +314,8 @@ function createGame(api) {
 
   // ------------------------------------------------ camera
   const view = () => { const W = api.W, H = api.H, sc = clamp(Math.min(W, H) / 560, 0.62, 1.25), top = hudBottom(); return { W, H, sc, cy: (top + H) / 2, top }; };
-  const toScreen = (x, y) => { const v = view(); return { x: (x - S.cam.x) * v.sc + v.W / 2, y: (y - S.cam.y) * v.sc + v.cy }; };
-  const toWorld = (x, y) => { const v = view(); return { x: (x - v.W / 2) / v.sc + S.cam.x, y: (y - v.cy) / v.sc + S.cam.y }; };
+  const toScreen = (x, y) => { if (meadow.backend === 'webgl') return meadow.screenPoint(x,y,1.5) || {x:-100,y:-100}; const v = view(); return { x: (x - S.cam.x) * v.sc + v.W / 2, y: (y - S.cam.y) * v.sc + v.cy }; };
+  const toWorld = (x, y) => { if (meadow.backend === 'webgl') return meadow.toWorld(x,y,S.bee.altitude) || {x:S.bee.x,y:S.bee.y}; const v = view(); return { x: (x - v.W / 2) / v.sc + S.cam.x, y: (y - v.cy) / v.sc + S.cam.y }; };
 
   // ------------------------------------------------ update
   function update(dt) {
@@ -321,21 +337,32 @@ function createGame(api) {
     moveBee(dt);
     if (S.mode === 'raid') { updateRaid(dt); camera(dt); return; }
     updateHazards(S.hz, S.world, S.sc, dt, t, { bee: S.bee, safe: false, hit, stuckFor: s => { S.bee.stuck = s; }, toast: m => api.toast(m, 1600) });
+    const flightEvent = updateFlight(S.flight, dt, { moving: Math.hypot(S.bee.vx,S.bee.vy)>20, boost: controls.held('boost'), wet: S.bee.inRain, wind: S.hz.wind.on>0, shelter: S.bee.shelter });
+    if (flightEvent === 'warning') { api.toast('Time to head home! Tap Hive. Nectar powers your flight; pollen feeds the growing bees.',5000); }
+    if (flightEvent === 'rescue') {
+      S.bee.x=HIVE.x; S.bee.y=HIVE.y; S.bee.vx=S.bee.vy=0; S.bee.tx=S.bee.ty=null; S.bee.altitude=1.2;
+      api.toast('The guard bees brought you home safely. Your learning progress is saved.',4500);
+      if(S.pollen>S.stolen){goHive();return;} S.flight=createFlight(S.need); S.bee.x=HIVE.x+120; S.returning=false;
+    }
     // landing on a flower
-    for (const f of S.flowers) if (f.st === 'open' && Math.hypot(f.x - S.bee.x, f.y - S.bee.y) < 44) { openChallenge(f); break; }
+    for (const f of S.flowers) if (!S.returning && f.st === 'open' && Math.hypot(f.x - S.bee.x, f.y - S.bee.y) < 44 && (meadow.backend !== 'webgl' || Math.abs(S.bee.altitude-flowerHeight(f))<.55)) { openChallenge(f); break; }
     // home
     S.hiveMsgT = Math.max(0, S.hiveMsgT - dt);
     if (S.mode === 'field' && Math.hypot(S.bee.x - HIVE.x, S.bee.y - HIVE.y) < HIVE.r) {
-      if (S.done >= S.need) { if (S.world.haz.raid) startRaid(); else goHive(); }
+      if (S.pollen > S.stolen && S.bee.altitude < 2.5) { if (S.world.haz.raid && S.done >= S.need) startRaid(); else goHive(); }
       else if (!S.hiveMsgT) { S.hiveMsgT = 4; api.toast(`🧺 Pollinate ${S.need - S.done} more flower${S.need - S.done > 1 ? 's' : ''} first!`, 2000); }
     }
     camera(dt);
   }
   function moveBee(dt) {
-    const b = S.bee, sp = 280 * (b.inRain && !b.shelter ? 0.55 : 1);
+    const b = S.bee, boosting = controls.held('boost') && S.flight.stamina>5;
+    const sp = 280 * (boosting?1.65:1) * (b.inRain && !b.shelter ? 0.55 : 1);
+    const vertical = (controls.held('rise')?1:0)-(controls.held('fall')?1:0);
+    if (vertical) { b.altitude = clamp(b.altitude+vertical*dt*1.7,.4,5.5); b.targetAltitude=null; }
+    else if (b.targetAltitude!=null) b.altitude += clamp(b.targetAltitude-b.altitude,-dt*1.7,dt*1.7);
     b.inv = Math.max(0, b.inv - dt); b.stuck = Math.max(0, b.stuck - dt);
     let ix = api.input.x, iy = api.input.y;
-    if (ix || iy) { b.tx = b.ty = null; }
+    if (ix || iy) { b.tx = b.ty = null; b.targetAltitude=null; }
     else if (b.tx != null) { const dx = b.tx - b.x, dy = b.ty - b.y, d = Math.hypot(dx, dy); if (d < 8) { b.tx = b.ty = null; } else { ix = dx / d * Math.min(1, d / 60); iy = dy / d * Math.min(1, d / 60); } }
     const m = Math.hypot(ix, iy); if (m > 1) { ix /= m; iy /= m; }
     const k = Math.min(1, dt * 7);
@@ -345,7 +372,7 @@ function createGame(api) {
     if (S.sc.towers.length) { if (inTower(S.sc, nx, b.y, 18)) { nx = b.x; b.vx = 0; } if (inTower(S.sc, nx, ny, 18)) { ny = b.y; b.vy = 0; } }
     b.x = nx; b.y = ny;
     if (Math.abs(b.vx) > 10) b.face = b.vx > 0 ? 1 : -1;
-    b.shelter = S.sc.leaves.some(l => Math.hypot(l.x - b.x, l.y - b.y) < l.r);
+    b.shelter = b.altitude<2.15 && S.sc.leaves.some(l => Math.hypot(l.x - b.x, l.y - b.y) < l.r);
   }
   function camera(dt) {
     const v = view(), hw = v.W / 2 / v.sc, hh = (v.H - v.top) / 2 / v.sc;
@@ -356,9 +383,12 @@ function createGame(api) {
   // ------------------------------------------------ draw
   function draw(ctx, W, H, title) {
     t += 0;
-    if (!S) { const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#bfe9ff'); g.addColorStop(1, '#eafbe0'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); emoji(ctx, '🌼', W * 0.2, H * 0.75, 70); emoji(ctx, '🌻', W * 0.8, H * 0.8, 80); emoji(ctx, '🐝', W / 2 + Math.sin(performance.now() / 400) * 40, H * 0.2, 70); return; }
+    if (!S) { controls.hide(); if(meadow.title(ctx,W,H,performance.now()/1000))return; const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#bfe9ff'); g.addColorStop(1, '#eafbe0'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); emoji(ctx, '🌼', W * 0.2, H * 0.75, 70); emoji(ctx, '🌻', W * 0.8, H * 0.8, 80); emoji(ctx, '🐝', W / 2 + Math.sin(performance.now() / 400) * 40, H * 0.2, 70); return; }
     const v = view();
+    controls.sync(S,v.top,meadow.backend);
     if (S.mode === 'hive') { S.hive.draw(ctx, W, H, v.top); drawGuards(ctx, true); return; }
+    const rendered = meadow.draw(ctx,W,H,v.top,S,t,coop.guards());
+    if (!rendered) {
     ctx.save();
     ctx.translate(W / 2, v.cy); ctx.scale(v.sc, v.sc); ctx.translate(-S.cam.x, -S.cam.y);
     const vw = { x: S.cam.x - W / 2 / v.sc, y: S.cam.y - (v.cy) / v.sc, w: W / v.sc, h: H / v.sc };
@@ -389,13 +419,14 @@ function createGame(api) {
     label(ctx, `🧺 ${S.done}/${S.need}`, b.x, b.y - 52, { size: 15, bg: S.done >= S.need ? '#2fae66' : '#e08a00' });
     drawGuards(ctx, false);
     ctx.restore();
+    }
     // screen overlays
     drawHazardHud(ctx, S.hz, W, H, t, toScreen, S.bee);
     if (S.mode === 'field' || S.mode === 'raid') drawPointer(ctx, W, H, v);
     if (S.daily && (S.mode === 'field')) {
       const d = S.daily, txt = d.done ? '👑 Queen’s request done! ✔' : `👑 ${d.text} (${d.got}/${d.need})`;
-      ctx.font = font(13); const w = ctx.measureText(txt).width + 20; ctx.fillStyle = 'rgba(43,35,80,.75)'; roundRect(ctx, 8, v.top + 4, w, 26, 13); ctx.fill();
-      ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(txt, 18, v.top + 18);
+      ctx.font = font(12);const shown=W<550&&txt.length>45?txt.slice(0,43)+'…':txt; const w = Math.min(W-16,ctx.measureText(shown).width + 20); ctx.fillStyle = 'rgba(27,45,24,.8)'; roundRect(ctx, 8, v.top + 55, w, 24, 12); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(shown, 18, v.top + 67);
     }
     if (S.mode === 'intro') drawIntro(ctx, W, H, v.top);
     if (S.mode === 'chal' && S.chal) S.chal.draw(ctx, W, H, v.top);
@@ -412,7 +443,7 @@ function createGame(api) {
   function drawPointer(ctx, W, H, v) {
     // arrow to the hive when the basket is full; else to the nearest open flower if none is on screen
     let tgt = null, icon = '🍯';
-    if (S.done >= S.need) tgt = HIVE;
+    if (S.done >= S.need || S.returning || S.flight.warned) tgt = HIVE;
     else {
       const on = S.flowers.filter(f => f.st === 'open').map(f => ({ f, p: toScreen(f.x, f.y) }));
       if (!on.some(o => o.p.x > 0 && o.p.x < W && o.p.y > v.top && o.p.y < H)) { const n = on.sort((a, b2) => Math.hypot(a.f.x - S.bee.x, a.f.y - S.bee.y) - Math.hypot(b2.f.x - S.bee.x, b2.f.y - S.bee.y))[0]; if (n) { tgt = n.f; icon = n.f.e; } }
@@ -470,10 +501,12 @@ function createGame(api) {
     if (S.mode === 'intro') { if (inR(S.introBtn, x, y)) { api.voice.stop(); Sfx.click(); enterField(false); } return; }
     if (S.mode === 'chal') { S.chal && S.chal.tap(x, y); return; }
     if (S.mode === 'hive') { S.hive.tap(x, y); return; }
-    const w = toWorld(x, y);
+    const screenFlower=meadow.backend==='webgl'?S.flowers.filter(f=>f.st==='open').map(f=>({f,p:meadow.screenPoint(f.x,f.y,flowerHeight(f))})).filter(o=>o.p&&Math.hypot(o.p.x-x,o.p.y-y)<45).sort((a,b)=>Math.hypot(a.p.x-x,a.p.y-y)-Math.hypot(b.p.x-x,b.p.y-y))[0]?.f:null;
+    const w = screenFlower || toWorld(x, y);
     if (S.mode === 'raid') { const h = S.hz.list.find(q => q.raid && !q.gone && !q.ball && Math.hypot(q.x - w.x, q.y - w.y) < 80); if (h) { ballHornet(h); return; } }
     const f = S.flowers.find(q => q.st === 'open' && Math.hypot(q.x - w.x, q.y - w.y) < 60);
-    S.bee.tx = f ? f.x : w.x; S.bee.ty = f ? f.y : w.y; S.drag = true;
+    const target=screenFlower||f;
+    S.returning=false; S.bee.tx = target ? target.x : w.x; S.bee.ty = target ? target.y : w.y; if(target)S.bee.targetAltitude=flowerHeight(target); S.drag = true;
   }
   function onMove(x, y) { if (!S || S.mode !== 'field' && S.mode !== 'raid' || S.guide || !S.drag) return; const w = toWorld(x, y); S.bee.tx = w.x; S.bee.ty = w.y; }
   function onUp() { if (!S) return; S.drag = false; if (S.mode === 'hive') S.hive.up(); if (S.chal) S.chal.release(); S.micHeld = false; }
@@ -481,25 +514,27 @@ function createGame(api) {
 
   return {
     start, update, draw, onTap, onMove, onUp,
-    tapZone: () => true,
-    stop() { coop.stop(); coop.talkUp(); coop.closeChat(); S = null; api.progress(null); },
+    tapZone: (x,y) => !S || S.mode !== 'field' || !!S.guide || (meadow.backend==='webgl'&&S.flowers.some(f=>{if(f.st!=='open')return false;const p=meadow.screenPoint(f.x,f.y,flowerHeight(f));return p&&Math.hypot(p.x-x,p.y-y)<45;})),
+    stop() { controls.hide(); coop.stop(); coop.talkUp(); coop.closeChat(); S = null; api.progress(null); },
     checkpoint() {
       // out of hearts: this field trip starts over (honey already in the hive is safe)
       if (!S) return;
       const o = S.o; start({ ...o }); if (S.mode === 'intro') enterField(false);
       api.toast('🌼 New field trip! Your hive’s honey is safe.', 2600);
     },
-    _S: () => S, _B: B, _M: M, _hit: hit, _goHive: goHive,
+    _S: () => S, _B: B, _M: M, _hit: hit, _goHive: goHive, _renderer: meadow,
   };
 }
 
 startGame({
   mascot: '🐝',
   together: false, // Bee Smart runs its own Guard Bee play-together (coop.js)
-  stick: false,
-  story: (d, e) => `Fly through the ${WORLDS[Math.min(5, e)].name}! Solve flower puzzles to pollinate them, dodge the dangers, and bring pollen home to make honey.`,
+  stick: true,
+  story: (d, e) => `Pollen, Honey & Survival. Explore ${WORLDS[Math.min(5, e)].name} in 3D, discover flowers through bee eyes, solve learning missions, and bring your harvest home.`,
   howTo: [
-    '👆 Drag your finger (or tap where to go, or use arrow keys) to fly.',
+    '👆 Drag on the left, tap a flower, or use arrow keys / WASD to fly. R rises, F lowers, and Shift boosts.',
+    '👁️ Switch between follow view and bee eyes. UV guides reveal nectar patterns; compound eyes are optional.',
+    '⏱️ Bring nectar and pollen home before your energy or flight time runs out. Puzzles pause the flight timer.',
     '🌼 Land on a flower to open its puzzle. Solve it to pollinate the flower and get pollen.',
     '❤️ Wrong answers are OK: Buzzy helps you. You only lose hearts to dangers like hornets and birds.',
     '🧺 Basket full? Follow the arrow to the 🍯 hive to make honey and build your hive.',

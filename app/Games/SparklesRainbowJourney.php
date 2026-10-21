@@ -6,7 +6,7 @@ use App\Models\GameProgress;
 use App\Models\Kid;
 
 /**
- * Sparkle's Rainbow Journey — bright unicorn maze. Same reading + math levels as Rusty's After Hours
+ * Candy Cloud Trail — family board game. Same reading + math levels as Rusty's After Hours
  * (config/game.php), so grades, goals and reports work the same way.
  */
 class SparklesRainbowJourney extends RustysAfterHours
@@ -21,6 +21,7 @@ class SparklesRainbowJourney extends RustysAfterHours
             'stage' => (int) ($state['stage'] ?? 1),
             'beans' => (int) ($state['tokens'] ?? 0),
             'stages' => (int) data_get($state, 'stats.stages', 0),
+            'board_games' => (int) data_get($state, 'stats.boardGames', 0),
         ];
     }
 
@@ -31,7 +32,7 @@ class SparklesRainbowJourney extends RustysAfterHours
         }
         $s = $progress->summary ?? [];
 
-        return [['📖', 'Lv '.($s['reading_level'] ?? 1)], ['🔢', 'Lv '.($s['math_level'] ?? 1)], ['🌈', 'Stage '.($s['stage'] ?? 1)]];
+        return [['📖', 'Lv '.($s['reading_level'] ?? 1)], ['🔢', 'Lv '.($s['math_level'] ?? 1)], ['🎲', ($s['board_games'] ?? 0).' games']];
     }
 
     public function overview(?GameProgress $progress): array
@@ -39,8 +40,7 @@ class SparklesRainbowJourney extends RustysAfterHours
         $rows = parent::overview($progress);
         $s = $progress?->summary ?? [];
         unset($rows['🌙 Night'], $rows['⭐ Adventures']);
-        $found = min(5, max(0, ($s['stage'] ?? 1) - 1));
-        $rows['🌈 Stage'] = ($s['stage'] ?? 1).' · family found '.$found.'/5 · 🍬 '.($s['beans'] ?? 0);
+        $rows['🎲 Board games'] = ($s['board_games'] ?? 0).' completed · 🍬 '.($s['beans'] ?? 0).' jelly beans';
 
         return $rows;
     }

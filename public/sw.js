@@ -1,6 +1,6 @@
 // JoyNot service worker: lets the site install as an app and keeps game files loading on spotty Wi-Fi.
 // Pages and saves always go to the server. Game files: network first, cached copy when offline.
-const CACHE = 'joynot-v16';
+const CACHE = 'joynot-v26';
 // Every game file, so games keep loading on spotty Wi-Fi (about 3 MB). Regenerate this list when files are added.
 const ASSETS = [
   '/css/joynot.css',
@@ -61,6 +61,10 @@ const ASSETS = [
   '/games/bee-smart/facts.js',
   '/games/bee-smart/game.css',
   '/games/bee-smart/game.js',
+  '/games/bee-smart/cover.svg',
+  '/games/bee-smart/meadow3d.js',
+  '/games/bee-smart/flight.js',
+  '/games/bee-smart/flight-controls.js',
   '/games/bee-smart/guard.css',
   '/games/bee-smart/guard.js',
   '/games/bee-smart/guide.js',
@@ -107,6 +111,19 @@ const ASSETS = [
   '/games/gizmo-garage/game.css',
   '/games/gizmo-garage/game.js',
   '/games/gizmo-garage/more.js',
+  '/games/gizmo-garage/cover.svg',
+  '/games/gizmo-garage/jobs.js',
+  '/games/gizmo-garage/mechanics.js',
+  '/games/gizmo-garage/garage.js',
+  '/games/gizmo-garage/workshop3d.js',
+  '/games/gizmo-garage/workshop-ui.js',
+  '/games/gizmo-garage/help.js',
+  '/games/gizmo-garage/remote.js',
+  '/games/gizmo-garage/repair.js',
+  '/games/gizmo-garage/inventor.js',
+  '/games/gizmo-garage/part-guide.js',
+  '/games/gizmo-garage/rope-tool.js',
+  '/games/gizmo-garage/crank.js',
   '/games/habitat-heroes/cover.jpg',
   '/games/habitat-heroes/data.js',
   '/games/habitat-heroes/game.css',
@@ -186,6 +203,13 @@ const ASSETS = [
   '/games/sparkles-rainbow-journey/js/curriculum-math.js',
   '/games/sparkles-rainbow-journey/js/curriculum-reading.js',
   '/games/sparkles-rainbow-journey/js/game.js',
+  '/games/sparkles-rainbow-journey/cover.svg',
+  '/games/sparkles-rainbow-journey/css/board.css',
+  '/games/sparkles-rainbow-journey/js/board.js',
+  '/games/sparkles-rainbow-journey/js/board-game.js',
+  '/games/sparkles-rainbow-journey/js/board-render.js',
+  '/games/sparkles-rainbow-journey/js/board-scene.js',
+  '/games/sparkles-rainbow-journey/js/board-remote.js',
   '/games/sparkles-rainbow-journey/js/render.js',
   '/games/sparkles-rainbow-journey/js/speech.js',
   '/games/sparkles-rainbow-journey/js/storage.js',
@@ -205,6 +229,14 @@ const ASSETS = [
   '/games/write-it/data.js',
   '/games/write-it/game.css',
   '/games/write-it/game.js',
+  '/games/write-it/quests.js',
+  '/games/write-it/adventure.js',
+  '/games/write-it/adventure3d.js',
+  '/games/write-it/explorer.js',
+  '/games/write-it/guidance.js',
+  '/games/write-it/realm-art.js',
+  '/games/write-it/crest.svg',
+  '/games/write-it/cover.svg',
   '/games/write-it/glyphs.js',
 ];
 

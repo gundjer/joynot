@@ -6,7 +6,7 @@ use App\Models\GameProgress;
 use App\Models\Kid;
 
 /**
- * Bee Smart: Hive Hero — fly a bee through 6 grade worlds, solve flower puzzles to pollinate them, make honey and build the hive.
+ * Buzzing Quest — 3D foraging, flower puzzles, honey production and colony care across six grade worlds.
  * Two skill ladders, mixed together in play:
  *  - LEVELS (reading track, the engine's level, starts from the kid's "Reads at" grade). Must match public/games/bee-smart/game.js
  *  - MATH_LEVELS (math track, saved in state.extra.math, starts from the kid's "Does math at" grade). Must match skills.js MATH.

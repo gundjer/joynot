@@ -130,6 +130,11 @@ export const LESSONS = {
   9: [
     { title: 'Finger spaces', text: 'Between words, leave a space about as wide as your finger. Start a sentence with a capital letter.', art: writeArt('I can'.split('')) },
     { title: 'Your name', text: 'Your name starts with a capital letter. The rest are small letters.', art: note('Capital first ➜ small letters after') },
+    { title: 'Weave a sentence spell', text: 'Choose the subject and action cards. Use both word runes, then add your own details. Tell who does what and where it happens. A capital and ending mark add extra mana.', art: note('The swift dragon flew over the river.') },
+  ],
+  10: [
+    { title: 'Build a story castle', text: 'Your opening introduces your idea. Two details explain it or tell what happens. Your closing brings your idea together. Each stone needs its own sentence.', art: note('Opening → First detail → Next detail → Closing') },
+    { title: 'Write to Pyra', text: 'Invite the dragon to join your team. Start each sentence with a capital and finish it with an ending mark. Use First, Next, Also, Then, or Because to connect your details. Read your scroll aloud: does it say what you mean?', art: note('Your ideas bring the story to life.') },
   ],
 };
 

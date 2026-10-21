@@ -113,11 +113,12 @@ class CoopController extends Controller
 
         // same phone re-joining (refresh) keeps its spot
         $m = ! empty($data['token']) ? $s->members()->where('token', $data['token'])->first() : null;
+        $active = $s->activeMembers()->get();
+        $limit = $s->game === 'gizmo-garage' ? 3 : self::MAX_MEMBERS;
+        if ((! $m || ! $active->contains('id', $m->id)) && $active->count() >= $limit) {
+            return response()->json(['message' => 'Up to '.$limit.' grown-ups can play at once.'], 409);
+        }
         if (! $m) {
-            $active = $s->activeMembers()->get();
-            if ($active->count() >= self::MAX_MEMBERS) {
-                return response()->json(['message' => 'Up to '.self::MAX_MEMBERS.' grown-ups can play at once.'], 409);
-            }
             $used = $active->pluck('color')->all();
             $color = collect(self::COLORS)->first(fn ($c) => ! in_array($c, $used, true)) ?? self::COLORS[0];
             $m = $s->members()->create(['token' => Str::random(32), 'name' => trim($data['name']), 'color' => $color, 'last_seen_at' => now()]);

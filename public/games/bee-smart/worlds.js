@@ -46,7 +46,7 @@ export function buildScenery(world, seed) {
     }
   }
   if (world.id === 5) for (let i = 0; i < 40; i++) sc.decor.push({ e: '🍂', x: R() * WW, y: R() * WH, s: 20 + R() * 10, a: 0.6 });
-  const leaves = world.haz.leaves || 0;
+  const leaves = Math.max(3, world.haz.leaves || 0);
   for (let i = 0; i < leaves; i++) { let p; do { p = { x: 420 + R() * (WW - 520), y: 120 + R() * (WH - 240) }; } while (!free(p.x, p.y, 260)); sc.leaves.push({ ...p, r: 70 }); }
   const webs = world.haz.webs || 0;
   for (let i = 0; i < webs; i++) { let p; do { p = { x: 500 + R() * (WW - 600), y: 140 + R() * (WH - 280) }; } while (!free(p.x, p.y, 320)); sc.webs.push({ ...p, r: 44 }); }
@@ -180,7 +180,8 @@ export function updateHazards(H, world, sc, dt, t, hooks) {
     if (!h.raid) { h.x = clamp(h.x, 30, WW - 30); h.y = clamp(h.y, 30, WH - 30); }
     if (sc.towers.length && inTower(sc, h.x, h.y)) { h.x -= h.vx * dt * 2; h.y -= h.vy * dt * 2; h.turn = 0; }
     if (h.vx) h.face = h.vx > 0 ? 1 : -1;
-    if (!hooks.safe && d < 42 && h.flee <= 0 && !h.raid) { if (hooks.hit('hornet', 'A hornet got you! Fly away from hornets.')) h.flee = 3; }
+    h.altitude=(h.altitude||1.6)+Math.max(-dt,Math.min(dt,(h.mode==='chase'?(b.altitude||1.6):1.6)-(h.altitude||1.6)));
+    if (!hooks.safe && d < 42 && Math.abs((b.altitude||1.6)-h.altitude)<.8 && h.flee <= 0 && !h.raid) { if (hooks.hit('hornet', 'A hornet got you! Fly away from hornets.')) h.flee = 3; }
   }
   // birds swoop: a shadow warns first
   const bd = H.bird;
@@ -189,7 +190,7 @@ export function updateHazards(H, world, sc, dt, t, hooks) {
     else if (bd.warn) { bd.warn -= dt; if (bd.warn <= 0) { bd.warn = 0; bd.active = true; } }
     else if (bd.active) {
       bd.x += bd.dir * 560 * dt; bd.y += bd.vy * dt;
-      if (!hooks.safe && Math.hypot(bd.x - b.x, bd.y - b.y) < 40) hooks.hit('bird', world.id === 4 ? 'A pigeon bumped you!' : 'A bird swooped at you! Watch for the shadow.');
+      if (!hooks.safe && !b.shelter && Math.abs((b.altitude||1.55)-2.7)<1.5 && Math.hypot(bd.x - b.x, bd.y - b.y) < 40) hooks.hit('bird', world.id === 4 ? 'A pigeon bumped you!' : 'A bird swooped at you! Watch for the shadow.');
       if ((bd.dir > 0 && bd.x > b.x + 1000) || (bd.dir < 0 && bd.x < b.x - 1000)) { bd.active = false; bd.next = world.haz.birdEvery * (0.7 + Math.random() * 0.6); }
     }
   }
@@ -201,7 +202,7 @@ export function updateHazards(H, world, sc, dt, t, hooks) {
     else { wd.next -= dt; if (wd.next <= 0) { const a = pick([0, Math.PI, Math.PI / 2, -Math.PI / 2, Math.PI / 4, Math.PI * 1.25]); wd.dx = Math.cos(a); wd.dy = Math.sin(a); wd.warn = 1.4; wd.next = wcfg.every * (0.8 + Math.random() * 0.5); hooks.toast && hooks.toast('🌀 Wind is coming!'); } }
   }
   // webs
-  for (const w of sc.webs) if (!hooks.safe && Math.hypot(w.x - b.x, w.y - b.y) < w.r) { if (hooks.hit('web', 'Stuck in a spider web! Fly around the webs.')) hooks.stuckFor(1.2); }
+  for (const w of sc.webs) if (!hooks.safe && (b.altitude||1.55)<2.6 && Math.hypot(w.x - b.x, w.y - b.y) < w.r) { if (hooks.hit('web', 'Stuck in a spider web! Fly around the webs.')) hooks.stuckFor(1.2); }
   // rain clouds
   b.inRain = false;
   for (const c of H.clouds) {
@@ -220,7 +221,7 @@ export function updateHazards(H, world, sc, dt, t, hooks) {
       if (tr.warn > 0) tr.warn -= dt;
       else { tr.x += tr.dir * 210 * dt; tr.puffT = (tr.puffT || 0) - dt; if (tr.puffT <= 0) { tr.puffT = 0.12; sp.puffs.push({ x: tr.x - tr.dir * 50, y: tr.y + rand(-20, 20), r: 34 + Math.random() * 14, life: 4 }); } if (tr.x < 260 || tr.x > WW + 80) { sp.tr = null; sp.next = world.haz.spray * (0.8 + Math.random() * 0.5); } }
     }
-    for (const p of sp.puffs) { p.life -= dt; if (!hooks.safe && p.life > 0.6 && Math.hypot(p.x - b.x, p.y - b.y) < p.r) hooks.hit('spray', 'The spray made Buzzy sick! Stay out of the spray cloud.'); }
+    for (const p of sp.puffs) { p.life -= dt; if (!hooks.safe && (b.altitude||1.55)<1.8 && p.life > 0.6 && Math.hypot(p.x - b.x, p.y - b.y) < p.r) hooks.hit('spray', 'The spray made Buzzy sick! Stay out of the spray cloud.'); }
     sp.puffs = sp.puffs.filter(p => p.life > 0);
   }
 }

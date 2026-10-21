@@ -80,9 +80,9 @@ return [
 
         'sparkles-rainbow-journey' => [
             'class' => App\Games\SparklesRainbowJourney::class,
-            'title' => "Sparkle's Rainbow Journey",
-            'description' => 'Sparkle the unicorn is lost! Gallop through candy-land mazes, collect rainbows and jelly beans, and read and solve your way through the gates to find her family.',
-            'cover' => '/games/sparkles-rainbow-journey/cover.jpg',
+            'title' => 'Candy Cloud Trail',
+            'description' => 'A 3D family board game! Solve a problem to roll, climb rainbow ladders, swoosh down slides, and race bots and family to Candy Castle. Family can join from the Grown-Ups area.',
+            'cover' => '/games/sparkles-rainbow-journey/cover.svg',
             'skills' => ['📖 Reading', '🔢 Math'],
             'ages' => 'Ages 4–10',
             'theme' => 'rainbow',
@@ -93,24 +93,24 @@ return [
 
         'bee-smart' => [
             'class' => App\Games\BeeSmart::class,
-            'title' => 'Bee Smart',
-            'description' => 'Count with Buzzy the bee, learn the ABCs and letter sounds, build words, and grow all the way up to a real spelling bee.',
-            'cover' => '/games/bee-smart/cover.jpg',
+            'title' => 'Buzzing Quest',
+            'description' => 'Pollen, Honey & Survival. Fly through a 3D meadow, explore natural flowers with UV guides, solve counting and reading missions, dodge predators, and care for your hive.',
+            'cover' => '/games/bee-smart/cover.svg',
             'skills' => ['🔢 Counting', '🔤 ABCs', '🐝 Spelling'],
             'ages' => 'Ages 4–11',
             'theme' => 'learn bee',
-            'version' => env('GAME_VERSION', '1.0.0'),
+            'version' => env('GAME_VERSION', '1.0.0').'-buzzing-quest-1',
         ],
 
         'write-it' => [
             'class' => App\Games\WriteIt::class,
-            'title' => 'Write It!',
-            'description' => 'Watch Penn the pencil write, then trace letters, numbers and words to cast spells and defend the tower in new monster lands.',
-            'cover' => '/games/write-it/cover.jpg',
-            'skills' => ['✏️ Handwriting', '🔤 Letters'],
-            'ages' => 'Ages 4–8',
+            'title' => 'Quillbound: The Ember Crown',
+            'description' => 'Walk through a 3D realm, roll rune dice and cast written spells that open gates, restore bridges and befriend a dragon. Collect gold and equip magical loot.',
+            'cover' => '/games/write-it/cover.svg',
+            'skills' => ['✏️ Handwriting', '📜 Creative writing'],
+            'ages' => 'Ages 4–9',
             'theme' => 'learn write',
-            'version' => env('GAME_VERSION', '1.0.0'),
+            'version' => env('GAME_VERSION', '1.0.0').'-quillbound-guided-3',
         ],
 
         'star-academy' => [
@@ -127,12 +127,12 @@ return [
         'gizmo-garage' => [
             'class' => App\Games\GizmoGarage::class,
             'title' => 'Gizmo Garage',
-            'description' => 'Build real machines on Gizmo’s pegboard: pushers, wheels, ramps, levers, gears, pulleys, screws and wedges. Set them up, press GO and watch them work!',
-            'cover' => '/games/gizmo-garage/cover.jpg',
+            'description' => 'Invent freely with weights, fulcrums, ramps, gears and rope. Explore illustrated part guides, play with family and earn optional challenge trophies.',
+            'cover' => '/games/gizmo-garage/cover.svg',
             'skills' => ['⚙️ Machines', '🔧 Engineering'],
             'ages' => 'Ages 5–11',
             'theme' => 'learn gizmo',
-            'version' => env('GAME_VERSION', '1.0.0'),
+            'version' => env('GAME_VERSION', '1.0.0').'-garage5',
         ],
 
         'robo-brain' => [

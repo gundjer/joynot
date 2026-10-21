@@ -7,8 +7,12 @@
 import { CoopLink } from './coop-link.js';
 import { talker, voicePlayer, playClip, sendChat, canTalk } from './coop-voice.js';
 import { tune, clean } from '/js/joynot-voice.js';
+import { mountBoardRemote } from '../sparkles-rainbow-journey/js/board-remote.js';
+import { mountGarageRemote } from '../gizmo-garage/remote.js';
 
 const C = window.COOP || {};
+let boardRemote = null;
+let garageRemote = null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const KID = C.kid || { name: 'Your kid', avatar: '🙂', color: '#ffd34d' };
@@ -65,6 +69,8 @@ async function join(name) {
 
 // ------------------------------------------------ playing
 function play() {
+  garageRemote?.destroy(); garageRemote = null;
+  boardRemote = null;
   screenLive = false; kidCamLive = false; lastFrameAt = 0; helpsKey = ''; mirrorKey = '';
   $('#guard').innerHTML = `${header()}
     <div class="stage" id="stage"><img id="pic" alt="${esc(KID.name)}’s game" draggable="false"><video id="screen" class="hidden" autoplay playsinline muted></video>
@@ -156,6 +162,14 @@ function act(k, extra, msg, cd) {
 function onState(s) {
   if (!s || typeof s !== 'object') return;
   st = s;
+  if (C.game === 'gizmo-garage' && s.garage) {
+    if (!garageRemote) garageRemote = mountGarageRemote({parent:document.querySelector('.panel'),me,send:message=>link&&link.send('host',message),onQuit:()=>{link?.end();location.href=C.urls.back;}});
+    garageRemote.update(s.garage);
+  }
+  if (C.game === 'sparkles-rainbow-journey' && s.board) {
+    if (!boardRemote) boardRemote = mountBoardRemote({ parent: document.querySelector('.panel'), me, send: message => link && link.send('host', message) });
+    boardRemote.update(s.board);
+  }
   if (net === 'connecting' && link && !link.linkOpen('host')) { net = 'relay'; netPill(); }
   if (s.f && !screenLive) showFrame(s.f);
   if (s.cam && !kidCamLive && F.video) { const k = $('#kidcam'); k.querySelector('img').src = s.cam; k.querySelector('img').classList.remove('hidden'); k.querySelector('video').classList.add('hidden'); k.classList.remove('hidden'); }

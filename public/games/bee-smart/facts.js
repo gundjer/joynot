@@ -55,7 +55,7 @@ export const HIVE_FACTS = [
   ['🕯️ Beeswax', 'Young bees make wax from special spots on their bellies.'],
   ['🍎 Fruit', 'A flower must get pollen before it can grow into a fruit.'],
   // 2 rainy garden
-  ['🍼 Nurse bees', 'Nurse bees feed the baby bees (larvae) a food called bee bread, made of pollen and honey.'],
+  ['🍼 Nurse bees', 'Nurse bees eat pollen and honey and use their glands to prepare food for the growing larvae.'],
   ['🛡️ Guard bees', 'Guard bees stand at the door and smell every bee that comes in.'],
   ['🌧️ Rainy days', 'Bees stay home when it rains. They live on stored honey.'],
   // 3 farm
@@ -70,6 +70,10 @@ export const HIVE_FACTS = [
   ['🔥 Bee ball', 'Some honey bees surround a hornet and buzz their muscles to make heat. The hornet gets too hot!'],
   ['🌡️ Hive heater', 'In winter, bees huddle in a ball and shiver to keep the queen warm.'],
   ['📊 Colony size', 'A strong hive can have fifty thousand bees working together.'],
+  ['UV nectar guides', 'Bees can see ultraviolet patterns on some petals. These nectar guides help them find the center of a flower. The game uses purple to show the hidden patterns.'],
+  ['Nectar and pollen', 'Nectar supplies sugary flight fuel. Pollen supplies protein and fat that growing bees need. Nurse bees prepare food for the larvae.'],
+  ['Winter fuel', 'Honey bees cluster together in cold weather. They use stored honey as fuel while vibrating their flight muscles to generate warmth.'],
+  ['Buzzing and bee types', 'Some native bees, including bumble bees, shake certain flowers to release pollen. Honey bees cannot perform this buzz pollination. Buzzing letter sounds in this game is phonics practice.'],
 ];
 
 /** Rooms you build with honey (each one unlocks a hat for your bee). */

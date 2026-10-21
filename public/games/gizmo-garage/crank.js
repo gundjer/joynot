@@ -1,0 +1,3 @@
+export function turnDelta(from,to){return Math.atan2(Math.sin(to-from),Math.cos(to-from));}
+export function crankHandle(renderer,p){const a=p.a??p.angle??0;return renderer.project(p.x+.52*Math.cos(a),p.y+.52*Math.sin(a));}
+export function pickCrank(renderer,x,y,state){const parts=state.phase==='build'?state.blueprint.parts:state.run?.parts||[];return parts.filter(p=>p.kind==='motor').map(p=>{const h=crankHandle(renderer,p),c=renderer.project(p.x,p.y);return {p,d:Math.hypot(h.x-x,h.y-y),center:Math.hypot(c.x-x,c.y-y)};}).filter(v=>v.d<25||state.phase==='run'&&v.center<45).sort((a,b)=>a.d-b.d)[0]?.p||null;}

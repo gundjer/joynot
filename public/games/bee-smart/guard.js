@@ -5,6 +5,9 @@ import { CoopLink } from '../_play/coop-link.js';
 import { memberTools } from './member-tools.js';
 import { emoji, roundRect, label, clamp } from '../_play/play.js';
 import { WORLDS, WW, WH, HIVE, buildScenery, drawWorld, drawLeaves, drawHornet, drawBee } from './worlds.js';
+import { Meadow3D, flowerHeight } from './meadow3d.js';
+const meadow = new Meadow3D();
+window.__beeGuardRenderer = meadow;
 
 const C = window.COOP || {};
 const $ = s => document.querySelector(s);
@@ -129,10 +132,11 @@ function view() {
 function pos(id, x, y) { let d = disp.get(id); if (!d) { d = { x, y }; disp.set(id, d); } d.tx = x; d.ty = y; return d; }
 function tap(x, y) {
   if (!st || (st.mode !== 'field' && st.mode !== 'raid')) { if (st && st.mode === 'chal') toast(`🧩 ${KID.name} is on a puzzle. Try 💡 Hint!`); return; }
-  const v = view(), wx = (x - v.W / 2) / v.sc + v.cx, wy = (y - v.H / 2) / v.sc + v.cy, near = 70 / Math.max(v.sc, 0.5);
-  const h = (st.hz || []).map(a => ({ id: a[0], x: a[1], y: a[2] })).sort((a, b) => Math.hypot(a.x - wx, a.y - wy) - Math.hypot(b.x - wx, b.y - wy))[0];
+  const v = view(), target=meadow.backend==='webgl'?meadow.toWorld(x,y,1.55):null;
+  const wx = target?target.x:(x-v.W/2)/v.sc+v.cx,wy=target?target.y:(y-v.H/2)/v.sc+v.cy,near=70/Math.max(v.sc,.5);
+  const h = (st.hz || []).map(a => ({ id: a[0], x: a[1], y: a[2] })).filter(a=>{if(meadow.backend!=='webgl')return true;const p=meadow.screenPoint(a.x,a.y,1.6);return p&&Math.hypot(p.x-x,p.y-y)<50;}).sort((a, b) => Math.hypot(a.x - wx, a.y - wy) - Math.hypot(b.x - wx, b.y - wy))[0];
   if (h && Math.hypot(h.x - wx, h.y - wy) < near * 1.3) { act('shoo', { id: h.id }, '🛡️ Shoo! The hornet flies away.'); return; }
-  const f = (st.fl || []).filter(a => a[4]).map(a => ({ id: a[0], x: a[1], y: a[2], gold: a[5] })).find(a => Math.hypot(a.x - wx, a.y - wy) < near);
+  const f = (st.fl || []).filter(a => a[4]).map(a => ({ id: a[0], x: a[1], y: a[2], gold: a[5] })).find(a => {if(meadow.backend!=='webgl')return Math.hypot(a.x-wx,a.y-wy)<near;const p=meadow.screenPoint(a.x,a.y,flowerHeight(a));return p&&Math.hypot(p.x-x,p.y-y)<45;});
   if (f) { if (f.gold) { toast('✨ That flower is already golden.'); return; } if (golds >= 1) { toast('✨ One golden flower per trip.'); return; } golds++; act('gold', { id: f.id }, '✨ You made a golden flower!'); return; }
   if (plants >= 3) { toast('🌱 You planted 3 flowers this trip. Nice gardening!'); return; }
   if (Math.hypot(wx - HIVE.x, wy - HIVE.y) < 260) { toast('🌱 Plant a little farther from the hive.'); return; }
@@ -157,6 +161,8 @@ function draw(ctx, W, H) {
   const world = WORLDS[st.w] || WORLDS[0];
   if (scKey !== `${st.w}:${st.seed}`) { scKey = `${st.w}:${st.seed}`; sc = buildScenery(world, st.seed); }
   if (st.mode === 'hive') {
+    const step=st.hive?.step||'deposit',cells=Array.from({length:6},()=>({s:step==='deposit'?0:step==='fan'?1:step==='cap'?2:3}));
+    if(meadow.hive(ctx,W,H,0,cells,st.hive?.fan||0,step)){ctx.fillStyle='#fff2cf';ctx.font='700 17px Andika,sans-serif';ctx.textAlign='center';ctx.fillText(`${KID.name} is caring for the colony`,W/2,35);return;}
     const g = ctx.createRadialGradient(W / 2, H / 2, 30, W / 2, H / 2, Math.max(W, H)); g.addColorStop(0, '#ffd77a'); g.addColorStop(1, '#c98a00'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
     emoji(ctx, '🍯', W / 2, H * 0.38, 90);
     const fan = st.hive ? st.hive.fan : 0, bw = Math.min(W - 40, 360);
@@ -167,6 +173,12 @@ function draw(ctx, W, H) {
     return;
   }
   const v = view();
+  if(meadow.backend==='webgl'){
+    const S={seed:st.seed,world,sc,bee:{x:st.bee[0],y:st.bee[1],altitude:st.altitude||1.55,vx:0,vy:-1},flowers:(st.fl||[]).map(f=>({id:f[0],x:f[1],y:f[2],e:f[3],st:f[4]?'open':'done',gold:!!f[5],fruit:f[6],ph:f[0]})),hz:{list:(st.hz||[]).map(h=>({id:h[0],x:h[1],y:h[2],vx:h[3],vy:0})),bird:st.bird?{active:true,x:st.bird[0],y:st.bird[1],dir:st.bird[2]}:{},clouds:(st.clouds||[]).map(c=>({x:c[0],y:c[1],r:c[2]})),spray:{puffs:[]}},pollen:st.pollen||0,vision:{uv:true,compound:false,firstPerson:false}};
+    meadow.draw(ctx,W,H,0,S,t,(st.g||[]).map(g=>({x:g[3],y:g[4],color:g[2]})));
+    if(st.mode==='chal'){ctx.fillStyle='rgba(22,39,25,.5)';ctx.fillRect(0,0,W,H);ctx.fillStyle='#fff4d4';ctx.font='700 20px Andika,sans-serif';ctx.textAlign='center';ctx.fillText(`${KID.name} is solving a flower puzzle`,W/2,H/2);}
+    return;
+  }
   ctx.save(); ctx.translate(W / 2, H / 2); ctx.scale(v.sc, v.sc); ctx.translate(-v.cx, -v.cy);
   drawWorld(ctx, world, sc, t, { x: v.cx - W / 2 / v.sc, y: v.cy - H / 2 / v.sc, w: W / v.sc, h: H / v.sc });
   for (const f of st.fl || []) {

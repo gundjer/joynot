@@ -3,187 +3,62 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <meta name="theme-color" content="#ffe9f5">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="JoyNot">
-    <meta name="format-detection" content="telephone=no">
-    <title>Sparkle's Rainbow Journey — {{ $kid->name }} — JoyNot</title>
+    <meta name="theme-color" content="#f7f4e9">
+    <title>Candy Cloud Trail — {{ $kid->name }} — JoyNot</title>
     <link rel="manifest" href="/manifest.json">
     <link rel="icon" href="{{ $B }}/icons/favicon.svg" type="image/svg+xml">
-    <link rel="icon" href="/favicon.ico" sizes="any">
-    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" sizes="180x180">
     <link rel="stylesheet" href="/fonts/fonts.css">
-    <link rel="stylesheet" href="{{ $B }}/css/game.css?v={{ $game->version() }}">
-    <style>
-        .loading-av { --c: #ff9d3d; font-size: clamp(54px, 13vh, 80px); width: 1.6em; height: 1.6em; border-radius: 50%; display: grid; place-items: center; background: var(--c); margin: 0 auto 12px; box-shadow: 0 0 0 6px #fff, 0 10px 30px rgba(122, 90, 166, .3); }
-        .loading-dots::after { content: ''; animation: dots 1.2s steps(4) infinite; }
-        @keyframes dots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } }
-        .player-row { margin: 4px 0 10px; display: flex; justify-content: center; gap: 6px; flex-wrap: wrap; }
-        .kid-chip { --c: #ff9d3d; display: inline-flex; align-items: center; gap: 8px; padding: 4px 14px 4px 4px; border-radius: 999px; background: #fff; border: 2px solid var(--c); font-size: clamp(16px, 3.6vh, 20px); font-weight: 700; }
-        .kid-chip span { width: 1.9em; height: 1.9em; border-radius: 50%; display: grid; place-items: center; background: var(--c); font-size: 1.1em; }
-    </style>
+    <link rel="stylesheet" href="{{ $B }}/css/board.css?v={{ $game->version() }}">
 </head>
 <body>
-<canvas id="game"></canvas>
-
-{{-- ================= HUD ================= --}}
-<div id="hud" class="hidden">
-    <div class="hud-left">
-        <div id="hudRainbows" class="pill rb">🌈 0/2</div>
-        <div id="hudBeans" class="pill">🍬 0</div>
-        <div id="hudStage" class="pill">Stage 1</div>
-    </div>
-    <div class="hud-right">
-        <canvas id="minimap" width="200" height="120"></canvas>
-        <button id="btnPause" class="round" title="Pause (P)" aria-label="Pause">⏸</button>
-        <button id="btnExit" class="round" title="Leave" aria-label="Leave">🏠</button>
-    </div>
-    <div id="toast" class="toast"></div>
-</div>
-
-<div id="controls" class="hidden">
-    <div id="stickZone">
-        <div id="stickBase"><div id="stickKnob"></div></div>
-        <div id="stickHint" class="stick-hint"><span class="touch-only">👆 Press and drag to walk</span><span class="key-only">⌨️ Arrow keys or WASD to walk, Space to open gates</span></div>
-    </div>
-    <div class="action-btns">
-        <button id="btnAction" class="act hidden">✨ Open</button>
-    </div>
-</div>
-
-{{-- ================= LOADING ================= --}}
-<div id="loading" class="screen">
-    <div class="title-inner">
-        <div class="loading-av" style="--c: {{ $kid->color }}">{{ $kid->avatar }}</div>
-        <h1 class="logo small">Sparkle's <span>Rainbow Journey</span></h1>
-        <p id="loadingText" class="sub">Getting {{ $kid->name }}'s adventure ready<span class="loading-dots"></span></p>
-    </div>
-</div>
-
-{{-- ================= TITLE ================= --}}
-<div id="title" class="screen hidden">
-    <div class="title-inner">
-        <h1 class="logo">Sparkle's<br><span>Rainbow Journey</span></h1>
-        <canvas id="titleArt" width="560" height="230"></canvas>
-        <div id="titleName" class="welcome"></div>
-        <div id="titleStory" class="story-line"></div>
-        <div class="player-row">
-            <span class="kid-chip" style="--c: {{ $kid->color }}"><span>{{ $kid->avatar }}</span>{{ $kid->name }}</span>
-            <button id="btnSwitch" class="mid-btn">👥 Switch player</button>
-        </div>
-        <div id="titleStats" class="stats"></div>
-        <div class="row">
-            <button id="btnPlay" class="big-btn">▶ PLAY</button>
-            <button id="btnTitleExit" class="mid-btn">🏠 Back to games</button>
-        </div>
-        <div class="turn-tip">📱↔ Tip: turn your phone sideways for a bigger view!</div>
-        <div class="key-hint">⌨️ Arrow keys or WASD to walk · Space to open gates · P to pause · M for music</div>
-        <a class="grownups" href="{{ $joynot['urls']['grownups'] }}">Grown-ups 🔒</a>
-    </div>
-</div>
-
-{{-- ================= STAGE INTRO ================= --}}
-<div id="intro" class="screen hidden">
-    <div class="title-inner">
-        <h1 id="introStage" class="logo small">Stage 1</h1>
-        <canvas id="introArt" width="460" height="190"></canvas>
-        <div id="introWho" class="who-line"></div>
-        <div id="introGoal" class="goal"></div>
-        <div class="row">
-            <button id="btnStart" class="big-btn">🦄 Let's go!</button>
-            <button id="btnIntroBack" class="mid-btn">🏠 Main Menu</button>
-        </div>
-        <ul class="howto">
-            <li class="touch-only">🕹️ Press anywhere and drag your finger to walk.</li>
-            <li class="key-only">⌨️ Arrow keys or WASD to walk. Space or Enter opens a gate.</li>
-            <li>🌈 Collect the rainbows. Grab jelly beans 🍬 along the way!</li>
-            <li>📖 🔢 Walk up to a gate and tap <b>Read gate</b> / <b>Solve gate</b>. Then press <b>TALK</b>.</li>
-            <li>🌈 When you have all the rainbows, open the <b>Rainbow Gate</b> to find Sparkle's family!</li>
-        </ul>
-    </div>
-</div>
-
-{{-- ================= GATE CHALLENGE ================= --}}
-<div id="challenge" class="overlay hidden">
-    <div class="panel ch-panel">
-        <div class="ch-head"><span id="chTitle">Read the gate!</span><button id="chClose" class="x" title="Walk away (Esc)" aria-label="Walk away">✖</button></div>
-        <div class="ch-sparky">
-            {{-- Pip the helper bird --}}
-            <svg class="pip" viewBox="0 0 100 100" aria-hidden="true">
-                <ellipse cx="50" cy="58" rx="34" ry="30" fill="#6ec6ff" stroke="#3b8fd1" stroke-width="3"/>
-                <ellipse cx="54" cy="66" rx="20" ry="16" fill="#fff4c2"/>
-                <path d="M22 54 Q10 46 14 66 Q22 64 28 60 Z" fill="#b388ff"/>
-                <path d="M46 30 Q50 14 58 26 Q64 12 66 30" fill="#ff6fa8"/>
-                <circle cx="62" cy="48" r="7" fill="#fff"/><circle cx="63" cy="48" r="4" fill="#3b2a5c"/><circle cx="64.5" cy="46.5" r="1.4" fill="#fff"/>
-                <path d="M74 52 L88 56 L74 60 Z" fill="#ffb347"/>
-                <ellipse cx="66" cy="58" rx="4" ry="2.4" fill="#ff9ad5" opacity=".7"/>
-            </svg>
-            <div id="chBubble" class="bubble">Hi!</div>
-        </div>
-        <div class="ch-body">
-            <div id="chContent" class="ch-content"></div>
-            <div id="chTeach" class="ch-teach hidden"></div>
-        </div>
-        <div id="chHeard" class="heard"></div>
-        <div class="ch-actions">
-            <button id="chHelp" class="mid-btn">💡 Help me</button>
-            <button id="chTalk" class="talk">🎤 TALK</button>
-            <button id="chType" class="mid-btn">⌨️ Type</button>
-        </div>
-        <div id="chGrown" class="grown hidden">Grown-up check: <button id="chYes">✔ Right</button> <button id="chNo">✖ Not yet</button></div>
-        <div id="chPad" class="pad hidden"></div>
-    </div>
-</div>
-
-{{-- ================= PAUSE / STEPS ================= --}}
-<div id="pause" class="overlay hidden">
-    <div class="panel menu">
-        <h2>Paused</h2>
-        <button id="btnResume" class="big-btn">▶ Keep Playing</button>
-        <button id="btnSteps" class="mid-btn">🌈 Rainbow Steps (problem solving)</button>
-        <button id="btnMusic" class="mid-btn">🎵 Music: On</button>
-        <button id="btnQuit" class="mid-btn">🏠 Main Menu</button>
-        <button id="btnPauseExit" class="mid-btn">🚪 Exit to JoyNot</button>
-    </div>
-</div>
-
-<div id="steps" class="overlay hidden">
-    <div class="panel menu wide">
-        <h2>🌈 The Rainbow Steps</h2>
-        <p class="sub">Use these steps for ANY tricky problem!</p>
-        <ol id="stepsList" class="steps-list"></ol>
-        <button id="btnStepsClose" class="big-btn">Got it!</button>
-    </div>
-</div>
-
-<div id="done" class="overlay hidden">
-    <div class="panel menu wide">
-        <h2 id="doneTitle">You found her!</h2>
-        <canvas id="doneArt" width="460" height="200"></canvas>
-        <p id="doneText" class="tip"></p>
-        <div id="doneStats" class="done-stats"></div>
-        <button id="btnNext" class="big-btn">🌈 Next Stage</button>
-        <button id="btnDoneTitle" class="mid-btn">🏠 Main Menu</button>
-        <button id="btnDoneExit" class="mid-btn">🚪 Exit to JoyNot</button>
-    </div>
-</div>
-
-<div id="quitConfirm" class="overlay hidden">
-    <div class="panel menu">
-        <h2>🏠 Leave this stage?</h2>
-        <p class="tip">Reading level, math level, stage and jelly beans are saved. This stage's map starts over next time.</p>
-        <button id="btnQuitNo" class="big-btn">▶ Keep Playing</button>
-        <button id="btnPlayAgain" class="mid-btn">🔄 Play Again</button>
-        <button id="btnQuitYes" class="mid-btn">🏠 Main Menu</button>
-        <button id="btnQuitExit" class="mid-btn">🚪 Exit to JoyNot</button>
-    </div>
-</div>
-
+<header class="masthead">
+    <a href="{{ $joynot['urls']['exit'] ?? '/dashboard' }}" class="brand" aria-label="JoyNot games"><img src="/icons/logo.svg" alt="" width="44" height="44"><b>Joy<span>Not</span></b></a>
+    <div class="mast-title">CANDY CLOUD TRAIL <span>•</span> A THINK & ROLL ADVENTURE</div>
+    <button id="soundToggle" class="icon" aria-label="Toggle voice" aria-pressed="false">🔊</button>
+</header>
+<div id="loading" role="status">Setting the table…</div>
+<main id="setup" class="setup">
+    <section class="welcome">
+        <div class="eyebrow"><span class="spark">✦</span> LITTLE QUESTIONS. BIG ADVENTURES.</div>
+        <h1>Candy<br><em>Cloud Trail.</em><span class="title-star">✳</span></h1>
+        <p>Think a little. Roll a little.<br>Race your favorite people to Candy Castle.</p>
+        <div class="welcome-board" aria-hidden="true"><div class="tiny-path"><i>1</i><i>2</i><i>3</i><i>4</i><i>5</i><i>6</i><i>7</i><i>8</i><i>9</i></div><span class="tiny-die">⚄</span><span class="tiny-castle">♜</span><span class="tiny-cloud">☁</span></div>
+        <div class="how-play"><h2>A sweet little race</h2><ol><li><b>01</b><span>Solve a reading or math problem.</span></li><li><b>02</b><span>Roll the die. Move that many spaces.</span></li><li><b>03</b><span>Climb ladders, swoosh down slides, and follow candy cards to the next matching color.</span></li><li><b>04</b><span>Reach space 60 to win. No exact roll needed!</span></li></ol></div>
+        <a class="grownup-link" href="{{ $joynot['urls']['grownups'] }}">Grown-Ups ↗</a>
+    </section>
+    <section class="setup-panel">
+        <div class="section-heading"><div><div class="eyebrow">SAVE A SEAT FOR SOMEONE SWEET</div><h2>Who’s coming along?</h2></div><span id="playerCount" class="count">2 / 6 players</span></div>
+        <p class="setup-tip">Play with bots, family, or both. Choose your character and shirt color.</p>
+        <div id="seats" class="seats"></div>
+        <div class="add-players"><button id="addFamily" class="secondary">＋ Family · this device</button><button id="addRemote" class="secondary">＋ Family · another device</button><button id="addBot" class="secondary">＋ Bot</button></div>
+        <p class="remote-tip">🔒 Separate devices: reserve a family seat, then have them open <b>Grown-Ups → Join</b> on their device. Only family with access to that area can join. Keep this game open as the host.</p>
+        <div class="setup-footer"><label for="practiceFocus">Practice along the way<select id="practiceFocus"><option value="both">Reading + math</option><option value="math">Math problems</option><option value="reading">Reading</option></select><small>Uses your Grown-Ups learning levels.</small></label><div><button id="resumeGame" class="secondary hidden">Resume saved game</button><button id="startGame" class="primary" disabled>Setting the table…</button></div></div>
+        <button id="setupExit" class="text-button">← Back to games</button>
+    </section>
+</main>
+<main id="table" class="table hidden">
+    <section class="board-area" aria-label="Candy Cloud Trail board">
+        <div class="board-heading"><div><div class="eyebrow">WELCOME TO THE SWEET SIDE</div><h1>Candy Cloud Trail<span>✦</span></h1></div><div class="board-actions"><button id="pauseGame" class="icon" aria-label="Pause game">Ⅱ</button><button id="exitGame" class="icon" aria-label="Save and return to games">⌂</button></div></div>
+        <div class="land-labels"><span>🍓 Strawberry Start</span><span>🌿 Mint Meadow</span><span>♜ Candy Castle</span></div>
+        <canvas id="game" tabindex="0" aria-label="3D candy board with 60 spaces. Drag to rotate. Player positions are listed beside the board."></canvas>
+        <div class="board-bottom"><div class="legend"><span><i class="ladder-dot"></i>Rainbow ladder ↑</span><span><i class="slide-dot"></i>Twisty slide ↓</span><span>🍬 Candy card</span></div><div class="view-tools"><span id="boardMode">3D TABLETOP</span><button id="zoomOut" aria-label="Zoom out">−</button><button id="resetView" aria-label="Reset board view">↺</button><button id="zoomIn" aria-label="Zoom in">＋</button></div></div>
+        <p class="board-tip">Drag the board to look around · Buttons and answers work with touch, mouse, or keyboard.</p>
+    </section>
+    <aside class="turn-panel">
+        <div class="turn-top"><span class="eyebrow">PASS THE LUCK AROUND</span><span id="roundNumber">Round 1</span></div>
+        <section id="turnCard" class="turn-card"><div id="turnAvatar" class="turn-avatar"></div><div><small id="turnKind">YOUR TURN</small><h2 id="turnName">Your turn</h2></div></section>
+        <section id="questionCard" class="question-card"><div class="step-label"><span>1</span><b id="questionTrack">Think it through</b><button id="readQuestion" class="icon" aria-label="Read question aloud">🔊</button></div><p id="questionText" class="question-text"></p><p id="turnWait" class="muted"></p><form id="answerForm"><label for="answerInput" class="sr-only">Your answer</label><input id="answerInput" autocomplete="off" maxlength="200" enterkeyhint="done"><button id="checkAnswer" class="primary" type="submit">Check answer ✓</button></form><div class="question-tools"><button id="listenAnswer" class="secondary">🎤 Say it</button><button id="hintQuestion" class="text-button">Need a hint?</button></div><p id="answerFeedback" class="feedback" role="status"></p><p id="questionHelp" class="help-note hidden"></p></section>
+        <section id="rollCard" class="roll-card hidden"><div class="step-label"><span>2</span><b>Your roll is ready!</b></div><p id="rollHint"></p><button id="rollDice" class="die-button"><span class="dice-face">⚄</span><strong>Roll the die</strong></button></section>
+        <section id="resultCard" class="result-card hidden"><div class="step-label"><span>3</span><b>Follow the trail</b></div><div id="dice" class="result-die">⚄</div><p id="resultText"></p><span id="candySwatch" class="candy-swatch hidden"></span><p id="resultWait" class="muted"></p><button id="nextTurn" class="primary">Next player →</button></section>
+        <section class="players-section"><h3>THE TRAVELERS</h3><ol id="players"></ol></section>
+    </aside>
+</main>
+<footer id="announcement" class="announcement" aria-live="polite">A little thinking. A little luck. A whole lot of candy.</footer>
+<div id="pause" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="pauseTitle"><div class="modal-card"><span class="eyebrow">TAKE A LITTLE BREATHER</span><h2 id="pauseTitle">Your trail can wait.</h2><p>The game is saved after every turn. You can resume it from the player setup screen.</p><button id="resumeTurn" class="primary">Keep playing →</button><div id="recoverSeats"></div><button id="backToSetup" class="secondary">Save & player setup</button></div></div>
+<div id="winner" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="winnerName"><div class="modal-card winner-card"><div class="eyebrow">SWEET VICTORY!</div><div id="winnerAvatar"></div><h2 id="winnerName"></h2><p id="winnerCopy"></p><button id="playAgain" class="primary">Another sweet adventure →</button><button id="winnerHome" class="secondary">Back to games</button></div></div>
 <script>window.JOYNOT = @json($joynot);</script>
-<script type="module" src="{{ $B }}/js/game.js?v={{ $game->version() }}"></script>
+<script type="module" src="{{ $B }}/js/board-game.js?v={{ $game->version() }}"></script>
 </body>
 </html>

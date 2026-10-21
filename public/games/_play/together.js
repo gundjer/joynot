@@ -307,7 +307,7 @@ export function mountTogether(o) {
       }
     }
     if (n - lastStatus > (o.statusInterval || 600)) { lastStatus = n; const s = status(); for (const m of direct) link.direct1(m.token, { t: 'st', s }); }
-    if (relay > 0 && n - lastRelay > 1500) {
+    if (relay > 0 && n - lastRelay > (o.relayInterval || 1500)) {
       lastRelay = n;
       const st = { ...status(), ...(o.frames !== false ? { f: frame(360, 0.5) } : {}) };
       if (F.video && n - lastCamRelay > 1400) { lastCamRelay = n; const c = camShot(); if (c) st.cam = c; }

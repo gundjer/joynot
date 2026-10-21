@@ -51,6 +51,7 @@ export function coopHost(api, hooks) {
     return {
       w: S.world.id, seed: S.seed, mode: S.mode, kid: CFG.kid ? CFG.kid.name : 'Kid', hearts: api.hearts(), need: S.need, done: S.done,
       bee: [R(S.bee.x), R(S.bee.y), S.bee.face, (api.state.extra.bee || {}).hat || ''],
+      altitude: S.bee.altitude || 1.55, vision: S.vision, pollen: S.pollen, nectar: S.nectar,
       fl: S.flowers.map(f => [f.id, R(f.x), R(f.y), f.e, f.st === 'open' ? 1 : 0, f.gold ? 1 : 0, f.fruit || '']),
       hz: hz.list.filter(h => !h.gone).map(h => [h.id, R(h.x), R(h.y), h.face, h.flee > 0 ? 1 : 0, h.raid ? 1 : 0]),
       bird: bd.active ? [R(bd.x), R(bd.y), bd.dir] : null,
