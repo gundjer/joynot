@@ -1,6 +1,6 @@
 // JoyNot service worker: lets the site install as an app and keeps game files loading on spotty Wi-Fi.
 // Pages and saves always go to the server. Game files: network first, cached copy when offline.
-const CACHE = 'joynot-v14';
+const CACHE = 'joynot-v16';
 // Every game file, so games keep loading on spotty Wi-Fi (about 3 MB). Regenerate this list when files are added.
 const ASSETS = [
   '/css/joynot.css',
@@ -66,7 +66,7 @@ const ASSETS = [
   '/games/bee-smart/guide.js',
   '/games/bee-smart/hive.js',
   '/games/bee-smart/skills.js',
-  '/games/bee-smart/together.js',
+  '/games/bee-smart/member-tools.js',
   '/games/bee-smart/words.js',
   '/games/bee-smart/worlds.js',
   '/games/budget-island/cover.jpg',
@@ -159,6 +159,10 @@ const ASSETS = [
   '/games/rustys-after-hours/js/curriculum-math.js',
   '/games/rustys-after-hours/js/curriculum-reading.js',
   '/games/rustys-after-hours/js/game.js',
+  '/games/rustys-after-hours/js/scene3d.js',
+  '/games/rustys-after-hours/js/pizzeria3d.js',
+  '/games/rustys-after-hours/js/component-guide.js',
+  '/games/rustys-after-hours/js/supplies.js',
   '/games/rustys-after-hours/js/hallway.js',
   '/games/rustys-after-hours/js/monsters.js',
   '/games/rustys-after-hours/js/render.js',

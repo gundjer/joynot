@@ -128,12 +128,12 @@ export function mountTogether(o) {
     camAsked = true;
     try {
       cam = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 240 }, frameRate: { ideal: 15 } }, audio: false });
-      if (!F.video) { stopCam(); return; }
+      if (!F.video || !G.size || !link || link.stopped) { stopCam(); return; }
       if (link) link.setCam(cam.getVideoTracks()[0]);
       const v = $('#jtSelf video'); v.srcObject = cam; v.play().catch(() => {});
       $('#jtSelf').classList.toggle('hidden', !G.size);
     } catch (e) { cam = null; o.toast && o.toast('📹 Ask a grown-up to allow the camera so they can see you.', 3200); }
-    camAsked = false;
+    finally { camAsked = false; }
   }
   function stopCam() {
     if (cam) cam.getTracks().forEach(t => t.stop());
@@ -146,7 +146,7 @@ export function mountTogether(o) {
   // sent as a video track. Grown-ups see exactly what the kid sees, smoothly.
   const mirror = document.createElement('canvas'), mctx = mirror.getContext('2d');
   function screenOn() {
-    if (screenTrack || !mirror.captureStream) return;
+    if (screenTrack || o.screen === false || !mirror.captureStream) return;
     try { const s = mirror.captureStream(15); screenTrack = s.getVideoTracks()[0]; if (link) link.setScreen(screenTrack); } catch (e) { screenTrack = null; }
   }
   function drawMirror() {
@@ -169,7 +169,7 @@ export function mountTogether(o) {
       ss.set({ session: j.session, token: j.token });
       urls = j.urls; token = j.token; F = { ...F, ...(j.features || {}) };
       link = new CoopLink({
-        urls: j.urls, token: j.token, role: 'host', csrf: csrf(), ice: j.ice, media: { audio: F.talk, video: F.video }, screen: !!mirror.captureStream,
+        urls: j.urls, token: j.token, role: 'host', csrf: csrf(), ice: j.ice, media: { audio: F.talk, video: F.video }, screen: o.screen !== false && !!mirror.captureStream,
         onMsg, onMembers, onPoll, onLink: () => { lastStatus = 0; }, onEnded: () => { link = null; G.clear(); dock(); stopCam(); },
         onTrack: (tk, track, stream, tag) => { if (track.kind === 'audio') player.attach(tk, track); else if (tag === 'cam') video(tk, track); },
       });
@@ -186,7 +186,10 @@ export function mountTogether(o) {
     if (!j.features) return;
     const was = F; F = { talk: !!j.features.talk, video: !!j.features.video };
     if (was.talk !== F.talk || was.video !== F.video) {
-      if (F.video && G.size) startCam(); else if (!F.video) stopCam();
+      if (F.video && G.size) startCam(); else if (!F.video) {
+        stopCam();
+        for (const g of G.values()) { g.cam = false; const el = bubble(g.token); el.classList.add('hidden'); delete el.dataset.live; }
+      }
       link.setMedia({ audio: F.talk, video: F.video }); if (!F.talk) talkUp(); dock();
     }
   }
@@ -205,7 +208,8 @@ export function mountTogether(o) {
   }
   function left(g) { video(g.token, null); o.toast && o.toast(`👋 ${g.name} left`, 1800); dock(); if (!G.size) { stopCam(); } }
   function onMsg(from, b) {
-    if (b.t === 'join') { const isNew = !G.has(from); const g = grownup(from, b.name, b.color); if (isNew) joined(g); link.connect(from); return; }
+    o.onMsg && o.onMsg(from, b);
+    if (b.t === 'join') { const isNew = !G.has(from); const g = grownup(from, b.name, b.color); if (isNew) joined(g); g.screen = false; link.reconnect(from); return; }
     if (b.t === 'chat') {
       if (!F.talk || seenChat.has(b.id)) return; seenChat.add(b.id); addLog(b);
       if (b.kid) return;
@@ -241,6 +245,7 @@ export function mountTogether(o) {
     if (b.t === 'scr') g.screen = !!b.on; // this grown-up is getting the live game video (so skip the slow pictures)
   }
   function onMembers(list) {
+    o.onMembers && o.onMembers(list);
     const live = new Set(list.map(m => m.token));
     for (const m of list) if (!G.has(m.token)) { joined(grownup(m.token, m.name, m.color)); link.connect(m.token); }
     for (const [k, g] of G) if (!live.has(k)) { G.delete(k); link.drop(k); player.drop(k); left(g); }
@@ -255,7 +260,7 @@ export function mountTogether(o) {
     if (!track) { const el = $('#jtVideos').querySelector(`[data-tk="${tk}"]`); if (el) el.remove(); return; }
     const el = bubble(tk), g = G.get(tk);
     const v = el.querySelector('video'); v.srcObject = new MediaStream([track]); v.play().catch(() => {});
-    const live = () => { el.dataset.live = '1'; v.classList.remove('hidden'); el.querySelector('img').classList.add('hidden'); };
+    const live = () => { el.dataset.live = '1'; el.classList.toggle('hidden', !F.video); v.classList.remove('hidden'); el.querySelector('img').classList.add('hidden'); };
     track.onunmute = live; v.onplaying = live;
     track.onmute = () => { delete el.dataset.live; };
     if (g) el.classList.toggle('hidden', !g.cam);
@@ -264,7 +269,7 @@ export function mountTogether(o) {
   // ------------------------------------------------ the live picture + what the kid is doing
   const shot = document.createElement('canvas');
   function jpeg(src, maxW, q) {
-    if (!src || !src.width || !src.height) return null;
+    if (!src || !(src.videoWidth || src.width) || !(src.videoHeight || src.height)) return null;
     const sw = src.videoWidth || src.width, sh = src.videoHeight || src.height;
     const k = Math.min(1, maxW / sw), w = Math.max(2, Math.round(sw * k)), h = Math.max(2, Math.round(sh * k));
     if (shot.width !== w || shot.height !== h) { shot.width = w; shot.height = h; }
@@ -280,6 +285,7 @@ export function mountTogether(o) {
     try { view = o.view ? o.view() : null; } catch (e) {}
     const c = canvas(), r = c ? c.getBoundingClientRect() : { width: 16, height: 9 };
     return {
+      ...s,
       kid: kid.name, goal: String(s.goal || '').slice(0, 300), screen: String(s.screen || '').slice(0, 400), tip: String(s.tip || '').slice(0, 300),
       level: String(s.level || '').slice(0, 80), ar: Math.round(r.width / Math.max(1, r.height) * 1000) / 1000,
       helps: (o.helps || []).map(h => [h.id, h.icon || '✨', h.label || h.id]), features: F, world,
@@ -292,7 +298,7 @@ export function mountTogether(o) {
     if (screenTrack) drawMirror(); // keeps the live game video moving
     const direct = link.members.filter(m => link.linkOpen(m.token)), relay = link.members.length - direct.length;
     const needFrames = direct.filter(m => !(G.get(m.token) || {}).screen);
-    if (needFrames.length && n - lastFrame > 330) {
+    if (o.frames !== false && needFrames.length && n - lastFrame > 330) {
       lastFrame = n;
       const d = frame(480, 0.55);
       if (d) {
@@ -300,10 +306,10 @@ export function mountTogether(o) {
         for (const m of needFrames) for (let i = 0; i < parts; i++) link.direct1(m.token, { t: 'fr', k: id, i, n: parts, d: d.slice(i * CHUNK, (i + 1) * CHUNK) });
       }
     }
-    if (n - lastStatus > 600) { lastStatus = n; const s = status(); for (const m of direct) link.direct1(m.token, { t: 'st', s }); }
+    if (n - lastStatus > (o.statusInterval || 600)) { lastStatus = n; const s = status(); for (const m of direct) link.direct1(m.token, { t: 'st', s }); }
     if (relay > 0 && n - lastRelay > 1500) {
       lastRelay = n;
-      const st = { ...status(), f: frame(360, 0.5) };
+      const st = { ...status(), ...(o.frames !== false ? { f: frame(360, 0.5) } : {}) };
       if (F.video && n - lastCamRelay > 1400) { lastCamRelay = n; const c = camShot(); if (c) st.cam = c; }
       link.pendingState = st;
     }
@@ -323,7 +329,10 @@ export function mountTogether(o) {
       link.send('*', { t: 'say', text: String(text).slice(0, 400), pitch: +opt.pitch || 1, rate: +opt.rate || 1, voice: opt.voice || '' });
     },
     talkDown, talkUp, openChat, closeChat,
-    stop() { clearInterval(iv); talkUp(); stopCam(); if (screenTrack) screenTrack.stop(); if (link) link.end(); link = null; },
+    get talking() { return !!(kidTalk && kidTalk.on); },
+    chat,
+    link: () => link,
+    stop() { clearInterval(iv); if (kidTalk) kidTalk.stop(); stopCam(); if (screenTrack) screenTrack.stop(); screenTrack = null; if (link) link.end(); link = null; },
   };
 }
 

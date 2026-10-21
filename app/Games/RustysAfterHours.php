@@ -38,6 +38,10 @@ class RustysAfterHours extends Game
         $serverEdit = (int) ($current['parentEditAt'] ?? 0);
         $seen = (int) ($incoming['seenParentEditAt'] ?? 0);
 
+        if (isset($current['resetId']) && ($incoming['seenResetId'] ?? null) !== $current['resetId']) {
+            return ['ok' => false, 'stale' => true, 'state' => $current];
+        }
+
         return $serverEdit > $seen ? ['ok' => false, 'stale' => true, 'state' => $current] : null;
     }
 
@@ -316,7 +320,7 @@ class RustysAfterHours extends Game
         $nowMs = (int) round(microtime(true) * 1000);
         // keep the grown-up's settings (scare level etc.), wipe everything else
         $settings = array_merge(self::SETTING_DEFAULTS, ($progress->state ?? [])['settings'] ?? []);
-        $state = ['settings' => $settings, 'parentEditAt' => $nowMs, 'updatedAt' => $nowMs, 'reset' => true];
+        $state = ['settings' => $settings, 'parentEditAt' => $nowMs, 'updatedAt' => $nowMs, 'reset' => true, 'resetId' => (string) \Illuminate\Support\Str::uuid()];
         $progress->update(['state' => $state, 'summary' => $this->summarize($state)]);
     }
 }

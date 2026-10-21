@@ -1,0 +1,35 @@
+const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
+const assert=require('node:assert/strict'),fs=require('fs'),path=require('path');
+(async()=>{
+const browser=await chromium.launch({executablePath:process.env.BROWSER_EXECUTABLE,headless:true,args:['--enable-unsafe-swiftshader','--autoplay-policy=no-user-gesture-required']});
+const ctx=await browser.newContext({viewport:{width:1280,height:800},serviceWorkers:'block'});
+await ctx.route('**/*',async route=>{const file=path.resolve('public','.'+new URL(route.request().url()).pathname);if(file.startsWith(path.resolve('public')+path.sep)&&fs.existsSync(file)&&fs.statSync(file).isFile())await route.fulfill({path:file});else await route.continue()});
+const page=await ctx.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text())});
+await page.goto('http://127.0.0.1:8766/__test/login');await page.goto('http://127.0.0.1:8766/play/rustys-after-hours/1');await page.waitForFunction(()=>window.__rustyStarted);
+await page.evaluate(async()=>{const {Store}=await import('/games/rustys-after-hours/js/storage.js');Store.data.stage=0;Store.data.tokens=60;Store.data.supplies={batteries:0,lens:false,chrome:false};Store.save();await Store.flushNow()});
+await page.reload();await page.waitForFunction(()=>window.__rustyStarted);
+await page.locator('#btnPrizes').click();await page.locator('#rustyPrizes article').filter({hasText:'Spare flashlight battery'}).locator('button').click();await page.locator('#rustyPrizes article').filter({hasText:'Efficient flashlight'}).locator('button').click();await page.locator('#rustyPrizes article').filter({hasText:'Chrome workshop finish'}).locator('button').click();await page.screenshot({path:'storage/testing/rusty-prizes.png'});await page.locator('.prize-close').click();
+await page.locator('#btnPlay').click();await page.locator('#btnStartNight').click();await page.waitForFunction(()=>!!window.__game);
+assert.equal(await page.evaluate(()=>window.__rustyRenderer.backend),'webgl');
+await page.waitForTimeout(800);await page.screenshot({path:'storage/testing/rusty-dining.png'});
+await page.evaluate(()=>{const g=window.__game,r=g.world.rooms.find(r=>r.theme==='stage');g.player.x=r.x0+3.7;g.player.y=r.y0+5.5;g.lightAngle=-Math.PI/2;g.graceUntil=10000;g.battery=10});
+await page.locator('#btnSpare').click();assert(await page.evaluate(()=>window.__game.battery>95));await page.waitForTimeout(2200);await page.screenshot({path:'storage/testing/rusty-stage.png'});
+await page.evaluate(()=>{const g=window.__game,r=g.world.rooms.find(r=>r.theme==='arcade');g.player.x=r.x0+4;g.player.y=r.y0+3.5;g.lightAngle=-Math.PI/2});await page.waitForTimeout(300);await page.screenshot({path:'storage/testing/rusty-arcade.png'});
+const battery=await page.evaluate(()=>{const g=window.__game,it=g.world.items.find(it=>it.type==='battery');g.player.x=it.x;g.player.y=it.y;g.battery=100;return {x:it.x,y:it.y}});await page.waitForTimeout(250);assert.equal(await page.evaluate(({x,y})=>window.__game.world.items.find(it=>it.x===x&&it.y===y).taken||false,battery),false);
+await page.evaluate(()=>window.__game.battery=12);await page.waitForTimeout(200);assert(await page.evaluate(()=>window.__game.battery>95));
+// Keep door challenges and the powered exit in the actual play loop.
+async function approachDoor(exit){await page.evaluate(exit=>{const g=window.__game,d=exit?g.world.exit:g.world.doors.find(d=>d.locked&&!d.exit),r=g.world.rooms[d.rooms[0]],[x,y]=d.tiles[0];g.player.x=x+.5;g.player.y=y+.5;if(d.orient==='v')g.player.x+=r.x0<x?-.9:.9;else g.player.y+=r.y0<y?-.9:.9;g.testDoor=d;},exit);await page.waitForTimeout(200);}
+await approachDoor(false);await page.locator('#btnAction').click({force:true});await page.waitForFunction(()=>window.__challenge.isOpen);await page.evaluate(()=>window.__challenge.close(true));await page.waitForFunction(()=>window.__game.testDoor.open);
+await approachDoor(true);await page.evaluate(()=>window.__game.cells=0);await page.locator('#btnAction').click({force:true});assert.equal(await page.evaluate(()=>window.__game.world.exit.open),false);assert.equal(await page.evaluate(()=>window.__challenge.isOpen),false);
+await page.evaluate(()=>window.__game.cells=window.__game.world.cellsNeeded);await page.locator('#btnAction').click({force:true});await page.waitForFunction(()=>window.__challenge.isOpen);await page.evaluate(()=>window.__challenge.close(true));await page.waitForFunction(()=>window.__game.world.exit.open);await page.evaluate(()=>{const g=window.__game,[x,y]=g.world.exit.tiles[0];g.player.x=x+.5;g.player.y=y+.5});await page.locator('#done').waitFor({state:'visible'});await page.locator('#btnNextNight').click();await page.locator('#btnStageGo').click();await page.waitForFunction(()=>!!window.__stage);await page.waitForTimeout(250);assert.equal(await page.evaluate(()=>window.__game),null);assert(await page.locator('#done').evaluate(e=>e.classList.contains('hidden')));assert(await page.locator('#stageHud').isVisible());
+
+await page.evaluate(()=>{const w=window.__stage;w.bot.kind='bunny';w.bot.color='#4fb6ff';w.phase='name';w.has=new Set(['legs','body','arms','head','eyes','bow'])});await page.waitForTimeout(400);await page.screenshot({path:'storage/testing/rusty-workshop.png'});
+await page.evaluate(()=>window.__stage.guide.show('body'));await page.locator('.component-guide [data-test]').click();await page.waitForTimeout(300);await page.screenshot({path:'storage/testing/rusty-component.png'});await page.locator('[data-fit-button]').click();
+await page.setViewportSize({width:390,height:844});await page.waitForTimeout(500);await page.evaluate(()=>window.__stage.guide.show('legs'));await page.screenshot({path:'storage/testing/rusty-component-mobile.png'});await page.locator('[data-fit-button]').click();
+await page.evaluate(()=>{window.__stage.bot.name='ResetTest';window.__stage.powerUp()});
+const response=await page.evaluate(async()=>{const r=await fetch('/grown-ups/kids/1/games/rustys-after-hours/reset',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]').content},body:JSON.stringify({confirm:'RESET'})});return r.status});assert.equal(response,200);
+await page.waitForFunction(()=>window.__stage===null&&document.querySelector('#btnPlay').textContent.includes('Night 1'),{},{timeout:12000});await page.waitForTimeout(6000);
+const state=await page.evaluate(async()=>{const {Store}=await import('/games/rustys-after-hours/js/storage.js');return Store.data});assert.equal(state.stage,0);assert.equal(state.night,1);assert.equal(state.bots.length,0);assert.equal(state.tokens,0);assert.equal(state.supplies.batteries,0);
+assert.deepEqual(errors,[]);console.log('PASS: WebGL pizzeria, coins, prizes, battery pickups, 3D workshop, component guide, mobile layout, live reset and cancelled build callback');await browser.close();
+})().catch(e=>{console.error(e);process.exit(1)});
+

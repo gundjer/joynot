@@ -305,6 +305,7 @@ export class Renderer3D {
 
   // ------------------------------------------------------------------ furniture pictures (drawn once)
   prop(type) {
+    if (type === 'item_coin') type = 'item_token';
     let P = this.props.get(type); if (P) return P;
     const S = 128, c = document.createElement('canvas'); c.width = S; c.height = S; const x = c.getContext('2d');
     const box = (col, X, Y, w, h, r = 6) => { x.fillStyle = col; x.beginPath(); x.roundRect ? x.roundRect(X, Y, w, h, r) : x.rect(X, Y, w, h); x.fill(); };
@@ -349,7 +350,7 @@ export class Renderer3D {
       case 'hide_curtain': w = 0.9; h = 0.95; for (let i = 0; i < 8; i++) box(i % 2 ? '#8e1b1b' : '#a52525', i * 16, 0, 17, 128, 2); x.fillStyle = '#e3c04a'; x.fillRect(0, 0, 128, 6); break;
       case 'item_cell': w = 0.2; h = 0.26; box('#2b5', 34, 20, 60, 104, 10); box('#ccc', 50, 6, 28, 16, 4); x.fillStyle = '#ff0'; x.beginPath(); x.moveTo(70, 34); x.lineTo(48, 74); x.lineTo(64, 74); x.lineTo(56, 112); x.lineTo(82, 64); x.lineTo(66, 64); x.closePath(); x.fill(); break;
       case 'item_battery': w = 0.14; h = 0.22; box('#e8c33a', 40, 20, 48, 104, 6); box('#222', 40, 86, 48, 38, 4); box('#aaa', 54, 8, 20, 14, 3); break;
-      default: w = 0.16; h = 0.16; x.fillStyle = '#f2c230'; x.beginPath(); x.arc(64, 64, 56, 0, 7); x.fill(); x.fillStyle = '#b8860b'; x.font = 'bold 70px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('★', 64, 68);
+      default: w = 0.16; h = 0.16; x.fillStyle = '#f2c230'; x.beginPath(); x.arc(64, 64, 56, 0, 7); x.fill(); x.fillStyle = '#b8860b'; x.font = 'bold 70px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('R', 64, 68);
     }
     P = { c, w, h, lit };
     this.props.set(type, P);

@@ -38,7 +38,7 @@
 <div id="hud" class="hidden">
     <div class="hud-left">
         <div id="hudCells" class="pill cells">⚡ 0/3</div>
-        <div id="hudTokens" class="pill">★ 0</div>
+        <div id="hudTokens" class="pill">🪙 0</div>
         <div class="pill battery"><span>🔦</span><div class="bar"><div id="hudBattery"></div></div></div>
     </div>
     <div id="danger" class="danger"><span id="dangerArrow" class="arrow">➤</span><span class="feet">👣</span></div>
@@ -55,6 +55,7 @@
     <div class="action-btns">
         <button id="btnAction" class="act hidden">🎤 Open</button>
         <button id="btnLight" class="act light">🔦</button>
+        <button id="btnSpare" class="act" aria-label="Use a spare flashlight battery">🔋 0</button>
     </div>
 </div>
 
@@ -86,6 +87,7 @@
         <div id="titleStats" class="stats"></div>
         <div class="row">
             <button id="btnVoice" class="mid-btn">🗣️ Voice</button>
+            <button id="btnPrizes" class="mid-btn">🪙 Prize counter</button>
             <button id="btnTitleExit" class="mid-btn exit-btn">🏠 Back to games</button>
             <a class="grownups" href="{{ $joynot['urls']['grownups'] }}">Grown-ups 🔒</a>
         </div>
@@ -200,7 +202,7 @@
 <div id="quitConfirm" class="overlay hidden">
     <div class="panel menu">
         <h2>🏠 Leave the night?</h2>
-        <p class="tip">Your reading level, math level, night and tokens are saved. This night's map starts over next time.</p>
+        <p class="tip">Your reading level, math level, night and coins are saved. This night's map starts over next time.</p>
         <button id="btnQuitNo" class="big-btn">▶ Keep Playing</button>
         <button id="btnPlayAgain" class="mid-btn">🔄 Play Again</button>
         <button id="btnQuitYes" class="mid-btn">🏠 Main Menu</button>

@@ -9,6 +9,8 @@
 // I do / We do / You do: the first time, Sparky's hand shows how; after that only if needed.
 import { drawBot, drawPart, KINDS, KIND_LIST, COLORS, COLOR_WORDS, NAMES, PARTS, SLOTS, POWERS } from './bots.js';
 import { drawCharacter, getTier } from './characters.js';
+import { ComponentGuide } from './component-guide.js';
+import { drawWorkshopRoom } from './scene3d.js';
 
 const pick = a => a[Math.floor(Math.random() * a.length)];
 const shuffle = a => { const b = a.slice(); for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; };
@@ -22,6 +24,8 @@ export class Workshop {
     this.names = shuffle(NAMES).slice(0, 3); this.sparks = []; this.hand = null; this.idle = 0; this.peek = 6 + Math.random() * 8;
     this.demo = env.firstTime ? 2 : 0; // parts that get the hand: 2 = "I do" on the first, "we do" hint on the second
     this.busy = false; this.powerI = 0; this.powerSel = 0; this.aliveT = 0;
+    this.bot.finish = env.store.data.supplies?.chrome ? 'chrome' : 'brushed';
+    this.guide = new ComponentGuide(this.bot, text => env.say(text)); this.disposed = false;
     const focus = env.store.data.settings.focus || 'both';
     const kindFor = i => focus === 'reading' ? (i === 3 ? 'math' : 'read') : focus === 'math' ? (i === 3 ? 'read' : 'math') : (i % 2 ? 'math' : 'read');
     this.crates = PARTS.map((p, i) => ({ part: p.id, label: p.label, kind: kindFor(i), open: false, shake: 0, item: null }));
@@ -79,6 +83,7 @@ export class Workshop {
   slot(id) { const [x, y] = SLOTS[id], u = this.botS / 100; return [this.botX + x * u, this.botY + y * u]; }
 
   update(dt) {
+    if (this.disposed || this.guide.dialog.open) return;
     this.t += dt; this.idle += dt; this.peek -= dt;
     if (this.peek < -2.5) this.peek = 9 + Math.random() * 10;
     for (const c of this.crates) c.shake = Math.max(0, c.shake - dt);
@@ -172,6 +177,7 @@ export class Workshop {
     const E = this.env;
     if (!c.item) c.item = E.tutor.pick(c.kind === 'read' ? 'reading' : 'math');
     const res = await E.challenge.open(c.item, {});
+    if (this.disposed) return;
     this.busy = false; this.idle = 0;
     if (res.levelUp) E.onLevelUp();
     if (!res.solved) { c.item = null; E.say('That lock is tricky. Tap the crate to try a new one!'); return; }
@@ -179,7 +185,7 @@ export class Workshop {
     const hx = this.portrait ? Math.max(40, Math.min(this.W - 40, c.x)) : (c.x < this.W / 2 ? c.x + c.w * 1.3 : c.x - c.w * 1.3);
     const hy = this.portrait ? c.y - c.w * 1.6 : c.y;
     this.loose = { part: c.part, label: c.label, x: c.x, y: c.y, hx, hy };
-    E.say(this.demo ? `The ${c.label}! Now drag the ${c.label} onto the robot, like my hand shows.` : `You got the ${c.label}! Drag it onto your robot.`);
+    this.guide.show(c.part);
   }
 
   /** Math locks in a power. */
@@ -187,6 +193,7 @@ export class Workshop {
     const E = this.env, P = POWERS[this.powerI]; if (!P) return;
     this.busy = true;
     const res = await E.challenge.open(E.tutor.pick('math'), {});
+    if (this.disposed) return;
     this.busy = false; this.idle = 0;
     if (res.levelUp) E.onLevelUp();
     if (!res.solved) { E.say(`Let's try another problem to lock in ${P.label.toLowerCase()}. Pick a number again!`); return; }
@@ -206,13 +213,16 @@ export class Workshop {
       : tier === 1 ? `It's alive! ... ${nm}'s eyes are glowing. Thank you for building me... Now I will find YOU. Ready or not!`
         : `It's alive... ${nm} is awake. Thank you for building me... Now... it's MY turn. Run!`;
     E.say(line);
-    setTimeout(() => this.env.onDone({ kind: this.bot.kind, color: this.bot.color, name: nm, powers: { ...this.bot.powers }, at: Date.now() }), 5200);
+    this.doneTimer = setTimeout(() => { if (!this.disposed) this.env.onDone({ kind: this.bot.kind, color: this.bot.color, finish: this.bot.finish, name: nm, powers: { ...this.bot.powers }, at: Date.now() }); }, 5200);
   }
+  dispose() { this.disposed = true; clearTimeout(this.doneTimer); this.guide.dispose(); }
 
   // ------------------------------------------------ drawing
   draw(ctx, W, H) {
+    if (this.guide.dialog.open) return;
     if (W !== this.W || H !== this.H) this.layout(W, H);
     const t = this.t, tier = getTier();
+    if (!drawWorkshopRoom(ctx, W, H)) {
     // room: warm lamp over a workbench, pegboard on the wall
     ctx.fillStyle = tier === 0 ? '#2c3a52' : '#141b28'; ctx.fillRect(0, 0, W, H);
     const pegW = Math.min(W * 0.62, 700), pegX = (W - pegW) / 2, pegY = this.top * 0.6, pegH = H * 0.5;
@@ -228,6 +238,7 @@ export class Workshop {
     const g = ctx.createRadialGradient(this.botX, this.botY - this.botS * 0.6, 10, this.botX, this.botY, Math.max(W, H) * 0.6);
     g.addColorStop(0, 'rgba(255,214,140,.38)'); g.addColorStop(1, 'rgba(255,214,140,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
     // assembly stand
+    }
     const sy = this.botY + this.botS * 0.66;
     ctx.fillStyle = '#2a3242'; ctx.beginPath(); ctx.ellipse(this.botX, sy + 6, this.botS * 0.62, this.botS * 0.12, 0, 0, 7); ctx.fill();
     ctx.fillStyle = '#ffcf4a'; ctx.beginPath(); ctx.ellipse(this.botX, sy, this.botS * 0.58, this.botS * 0.11, 0, 0, 7); ctx.fill();
@@ -235,7 +246,7 @@ export class Workshop {
 
     if (this.phase === 'kit') return this.drawKits(ctx, W, H);
     // while picking paint, the robot shows the color you tapped
-    const bot = { kind: this.bot.kind, color: this.bot.color || (this.phase === 'paint' && this.canSel) || '#9aa3ad' };
+    const bot = { kind: this.bot.kind, finish: this.bot.finish, color: this.bot.color || (this.phase === 'paint' && this.canSel) || '#9aa3ad' };
     const built = !['kit', 'paint', 'build'].includes(this.phase) || this.phase === 'paint';
     const alive = this.phase === 'alive';
     if (alive && tier > 0) { // lights flicker as it wakes up
@@ -299,7 +310,9 @@ export class Workshop {
         ctx.fillStyle = c.kind === 'read' ? '#7fc8ff' : '#ffb347'; ctx.beginPath(); ctx.arc(x + c.w / 2, y + c.w / 2, c.w * 0.26, 0, 7); ctx.fill();
         ctx.fillStyle = '#000'; ctx.font = `${Math.round(c.w * 0.28)}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(c.kind === 'read' ? '📖' : '🔢', x + c.w / 2, y + c.w / 2 + 2);
       } else { ctx.fillStyle = '#6be675'; ctx.font = `700 ${Math.round(c.w * 0.4)}px Andika, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('✓', x + c.w / 2, y + c.w / 2); }
-      ctx.fillStyle = '#f4efe6'; ctx.font = `700 ${Math.round(Math.max(11, c.w * 0.2))}px Andika, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(c.label, x + c.w / 2, y + c.w + 3);
+      ctx.fillStyle = '#f4efe6'; ctx.font = `700 ${Math.round(Math.max(11, c.w * 0.18))}px Andika, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      const labels = { legs: ['servo', 'legs'], body: ['control', 'frame'], arms: ['arm', 'linkages'], head: ['hinged', 'head'], eyes: ['light', 'sensors'], bow: ['power', 'module'] };
+      labels[c.part].forEach((line, row) => ctx.fillText(line, x + c.w / 2, y + c.w + 3 + row * 15, c.w + 5));
       ctx.restore();
     }
   }

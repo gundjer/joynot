@@ -115,7 +115,7 @@ async function boot() {
       <div class="pg-stats"></div>
       <div class="pg-badges"></div>
       <div class="pg-boss hidden"></div>
-      <button class="pg-btn big go" id="pgPlay" type="button">▶ PLAY</button>
+      <button class="pg-btn big go" id="pgPlay" type="button" disabled>Loading…</button>
       <div class="pg-row"><button class="pg-btn ghost" id="pgHow" type="button">❓ How to play</button><button class="pg-btn ghost" id="pgLesson" type="button">📘 Lesson</button><button class="pg-btn ghost" id="pgBack" type="button">🏠 Games</button></div>
       <ul class="pg-howto hidden"></ul>
       <p class="pg-keys">⌨️ Arrow keys or WASD to move · Space = action · Esc = pause</p>
@@ -133,6 +133,7 @@ async function boot() {
   window.__playScene = scene; window.__playApi = api; // tests
   together = mountPlayTogether(canvas);
   wire();
+  $('#pgPlay').disabled = false;
   sizeCanvas();
   refreshTitle();
   mode = 'title';

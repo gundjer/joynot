@@ -54,7 +54,8 @@ input, select { user-select: text; -webkit-user-select: text; }
 .act.light.off { background: #444; border-color: #666; filter: grayscale(1); }
 .act.pulse { background: #3b7a2b; border-color: #9cf08a; animation: pulse 1s infinite; }
 .act.pulse.hide { background: #6a4a00; border-color: var(--gold); }
-@keyframes pulse { 50% { transform: scale(1.06); } }
+  @keyframes pulse { 50% { transform: scale(1.06); } }
+  #btnSpare { min-width: calc(var(--act) * .72); height: calc(var(--act) * .72); border-width: 3px; font-size: calc(var(--act) * .2); }
 
 /* ---------- screens & overlays ---------- */
 .screen { position: fixed; inset: 0; z-index: 20; background: radial-gradient(ellipse at 50% 30%, #2a1840 0%, #0b0712 70%); display: flex; overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; padding: var(--sat) var(--sar) var(--sab) var(--sal); }

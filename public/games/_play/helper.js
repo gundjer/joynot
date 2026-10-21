@@ -21,7 +21,7 @@ const store = {
 
 let F = { talk: false, video: false, ...(C.features || {}) }, me = null, link = null, talk = null, cam = null, st = null, net = 'connecting';
 let unread = 0, sheetOpen = false, toastT = 0, lastFrameAt = 0, helpsKey = '', screenLive = false, mirrorKey = '', kidCamLive = false;
-let hear = store.get('joynot_hear_game') !== 'off', camRelayT = 0;
+let hear = store.get('joynot_hear_game') !== 'off', camRelayT = 0, frameWatchT = 0, camOpening = false;
 const cool = {}, parts = new Map(), player = voicePlayer(), seenChat = new Set(), chatLog = [];
 const ready = (k, s) => { const n = performance.now() / 1000; if ((cool[k] || 0) > n) return false; cool[k] = n + (s ?? COOL[k] ?? 5); return true; };
 
@@ -65,6 +65,7 @@ async function join(name) {
 
 // ------------------------------------------------ playing
 function play() {
+  screenLive = false; kidCamLive = false; lastFrameAt = 0; helpsKey = ''; mirrorKey = '';
   $('#guard').innerHTML = `${header()}
     <div class="stage" id="stage"><img id="pic" alt="${esc(KID.name)}’s game" draggable="false"><video id="screen" class="hidden" autoplay playsinline muted></video>
       <iframe id="mirror" class="hidden" sandbox="allow-same-origin" title="The problem ${esc(KID.name)} sees" tabindex="-1"></iframe>
@@ -87,7 +88,7 @@ function play() {
     </div></div>`;
   $('#leave').onclick = () => { if (link) link.end(); location.href = C.urls.back; };
   const nm = document.createElement('button'); nm.type = 'button'; nm.textContent = `✏️ ${me.name}`; nm.style.background = me.color; $('#leave').before(nm);
-  nm.onclick = () => { if (link) { link.stopped = true; [...link.peers.keys()].forEach(k => link.drop(k)); } nameScreen(); };
+  nm.onclick = () => { if (link) link.end(true); nameScreen(); };
   toast(`👋 You joined as ${me.name}!`);
   buttons();
   const pic = $('#pic'), scr = $('#screen');
@@ -122,8 +123,8 @@ function play() {
       else if (tag === 'screen') screenVideo(track);
       else if (tag === 'cam') kidCam(track);
     },
-    onLink: (tk, open) => { net = open ? 'direct' : 'relay'; netPill(); if (open && cam) link.send('host', { t: 'cam', on: true }); if (!open) screenOff(); },
-    onEnded: () => { stopCam(); if (talk) talk.stop(); endedScreen(`${KID.name} stopped playing. Thanks for playing together!`); },
+    onLink: (tk, open) => { net = open ? 'direct' : 'relay'; netPill(); if (open && cam) link.send('host', { t: 'cam', on: true }); if (!open) { kidCamLive = false; screenOff(); } },
+    onEnded: () => { clearInterval(camRelayT); clearInterval(frameWatchT); stopCam(); if (talk) talk.stop(); player.drop('host'); endedScreen(`${KID.name} stopped playing. Thanks for playing together!`); },
   });
   window.__joynotLink = link; // tests
   talk = talker({ link, voiceUrl: C.urls.voice, token: me.token, onTalk: (on, mode) => gpill(on ? (mode === 'clip' ? '🎙️ Recording… let go to send' : `🎙️ ${KID.name} can hear you`) : '', me.color), onError: m => toast('🎙️ ' + m) });
@@ -131,9 +132,9 @@ function play() {
   link.start();
   addEventListener('pointerdown', () => player.resume(), { capture: true });
   addEventListener('pagehide', () => link && link.end());
-  setInterval(() => { if (net !== 'connecting' && lastFrameAt && !screenLive && performance.now() - lastFrameAt > 8000) $('#wait').classList.remove('hidden'); }, 2000);
+  frameWatchT = setInterval(() => { if (net !== 'connecting' && lastFrameAt && !screenLive && performance.now() - lastFrameAt > 8000) $('#wait')?.classList.remove('hidden'); }, 2000);
   // camera through JoyNot when there's no direct link: a small picture about every 1.5 seconds
-  setInterval(() => { if (cam && link && !link.linkOpen('host') && F.video) { const d = camShot(); if (d) link.send('host', { t: 'camf', d }); } }, 1500);
+  camRelayT = setInterval(() => { if (cam && link && !link.linkOpen('host') && F.video) { const d = camShot(); if (d) link.send('host', { t: 'camf', d }); } }, 1500);
   addEventListener('pointerdown', () => { [$('#screen'), $('#kidcam video')].forEach(v => { if (v && v.paused && v.srcObject) v.play().catch(() => {}); }); }, { capture: true });
 }
 function netPill() { const el = $('#net'); if (!el) return; el.textContent = net === 'direct' ? '⚡ Direct' : net === 'relay' ? '☁️ Online' : '⏳ Connecting'; }
@@ -159,7 +160,7 @@ function onState(s) {
   if (s.f && !screenLive) showFrame(s.f);
   if (s.cam && !kidCamLive && F.video) { const k = $('#kidcam'); k.querySelector('img').src = s.cam; k.querySelector('img').classList.remove('hidden'); k.querySelector('video').classList.add('hidden'); k.classList.remove('hidden'); }
   showMirror(s.view);
-  if (s.features) { const was = F; F = { talk: !!s.features.talk, video: !!s.features.video }; if (was.talk !== F.talk || was.video !== F.video) renderTogether(); }
+  if (s.features) applyFeatures(s.features);
   $('#status').innerHTML = `${s.level ? `<div class="lv">${esc(s.level)}</div>` : ''}${s.goal ? `<div class="goal">🎯 ${esc(s.goal)}</div>` : ''}${s.screen ? `<div class="scr">📺 ${esc(s.screen)}</div>` : ''}${s.tip ? `<div class="tipbox">💡 <b>Coach tip:</b> ${esc(s.tip)}</div>` : ''}` || `<div class="scr">${esc(KID.name)} is getting ready…</div>`;
   buttons();
 }
@@ -241,7 +242,15 @@ function onMsg(from, b) {
   if (b.t === 'talk' && F.talk) gpill(b.on ? `🎙️ ${KID.name} is talking…` : '', KID.color);
   if (b.t === 'voice' && F.talk) playClip(b.url, () => gpill(`🎙️ ${b.name} is talking…`, KID.color), () => gpill(''));
 }
-function onPoll(j) { if (j.features) { const was = F; F = { talk: !!j.features.talk, video: !!j.features.video }; if (was.talk !== F.talk || was.video !== F.video) { link.setMedia({ audio: F.talk, video: F.video }); if (!F.video) { stopCam(); $('#kidcam').classList.add('hidden'); } renderTogether(); } } }
+function applyFeatures(features) {
+  const was = F; F = { talk: !!features.talk, video: !!features.video };
+  if (was.talk === F.talk && was.video === F.video) return;
+  link.setMedia({ audio: F.talk, video: F.video });
+  if (!F.video) { stopCam(); kidCamLive = false; $('#kidcam').classList.add('hidden'); }
+  if (!F.talk && talk) talk.stop();
+  renderTogether();
+}
+function onPoll(j) { if (j.features) applyFeatures(j.features); }
 
 // ------------------------------------------------ talk, chat, camera
 function renderTogether() {
@@ -286,13 +295,17 @@ function drawLog() {
   box.scrollTop = box.scrollHeight;
 }
 async function startCam() {
+  if (camOpening || cam || !F.video || !link || link.stopped) return;
   if (!canTalk()) { toast('📹 The camera needs a secure https:// page.'); return; }
+  camOpening = true;
   try {
     const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 240 }, frameRate: { ideal: 15 } }, audio: false });
+    if (!F.video || !link || link.stopped) { s.getTracks().forEach(t => t.stop()); return; }
     cam = s; link.setCam(s.getVideoTracks()[0]); link.send('host', { t: 'cam', on: true });
     const v = $('#selfcam'); v.srcObject = s; v.classList.remove('hidden'); v.play().catch(() => {});
     toast(`📹 Video call on: you and ${KID.name} can see each other`);
   } catch (e) { toast('📹 Please allow the camera.'); }
+  finally { camOpening = false; }
   renderTogether();
 }
 function stopCam() {

@@ -13,6 +13,7 @@ export function defaults() {
     night: 1, tokens: 0, bestStreak: 0,
     // level-up cycle: 0 night → 1 workshop → 2 hallway run → 3 workshop. stageUp = a level-up happened, next one unlocks
     stage: 0, stageUp: false, bots: [], runs: 0, builds: 0,
+    supplies: { batteries: 0, lens: false, chrome: false }, seenResetId: null,
     settings: { scare: 'mild', monsterSpeed: 'normal', focus: 'both', strict: 'easy', voices: true },
     stats: { readRight: 0, readWrong: 0, mathRight: 0, mathWrong: 0, nights: 0, caught: 0 },
     updatedAt: 0, parentEditAt: 0, seenParentEditAt: 0,
@@ -66,11 +67,13 @@ export const Store = {
       if (r.ok) { const j = await r.json(); online = true; if (j.csrf) this.csrf = j.csrf; server = j.state; if (j.kid) this.player = j.kid; }
     } catch (e) {}
     let pick = local;
-    if (server && (!local || (server.updatedAt || 0) > (local.updatedAt || 0) || (server.parentEditAt || 0) > (local.seenParentEditAt || 0))) pick = server;
+    if (server && (!local || (server.resetId && server.resetId !== local.seenResetId) || (server.updatedAt || 0) > (local.updatedAt || 0) || (server.parentEditAt || 0) > (local.seenParentEditAt || 0))) pick = server;
     this.data = sanitize(merge(defaults(), pick || {}));
     this.data.seenParentEditAt = this.data.parentEditAt || 0;
+    this.data.seenResetId = this.data.resetId || null;
     this.data.name = this.player.name; // name always comes from the JoyNot profile
     delete this.data.reset;
+    if (server?.resetId && server.resetId !== local?.seenResetId) writeJSON(QKEY, (readJSON(QKEY) || []).filter(a => String(a.kid_id) !== String(kid.id)));
     this.persistLocal();
     if (online && local && pick === local) this.push(); // device had newer progress: send it up now
     this.flushQueue();
@@ -78,6 +81,31 @@ export const Store = {
   },
 
   persistLocal() { if (this.playerId) writeJSON(keyFor(this.playerId), this.data); },
+
+  applyServer(state) {
+    const reset = state.reset === true || (!!state.resetId && state.resetId !== this.data.seenResetId);
+    clearTimeout(this._t);
+    this.data = sanitize(merge(defaults(), state));
+    this.data.seenParentEditAt = this.data.parentEditAt || 0;
+    this.data.seenResetId = this.data.resetId || null;
+    this.data.name = this.player.name;
+    delete this.data.reset;
+    if (reset) writeJSON(QKEY, (readJSON(QKEY) || []).filter(a => String(a.kid_id) !== String(this.playerId)));
+    this.persistLocal();
+    this.onExternalChange && this.onExternalChange({ reset });
+  },
+
+  async sync() {
+    if (!this.playerId || this._syncing) return;
+    this._syncing = true;
+    try {
+      const r = await fetch(CFG.urls.progress, { headers: { Accept: 'application/json' }, credentials: 'same-origin', cache: 'no-store' });
+      if (!r.ok || r.redirected) return;
+      const j = await r.json(); if (j.csrf) this.csrf = j.csrf;
+      const s = j.state;
+      if (s && ((s.resetId && s.resetId !== this.data.seenResetId) || (s.parentEditAt || 0) > (this.data.seenParentEditAt || 0))) this.applyServer(s);
+    } catch (e) {} finally { this._syncing = false; }
+  },
 
   save() {
     if (!this.playerId) return;
@@ -104,12 +132,7 @@ export const Store = {
       if (r.ok && id === this.playerId) {
         const j = await r.json();
         if (j.stale && j.state) { // a grown-up changed this kid's settings in the Grown-ups area
-          this.data = sanitize(merge(defaults(), j.state));
-          this.data.seenParentEditAt = this.data.parentEditAt || 0;
-          this.data.name = this.player.name;
-          delete this.data.reset;
-          this.persistLocal();
-          this.onExternalChange && this.onExternalChange();
+          this.applyServer(j.state);
         }
       }
     } catch (e) {}

@@ -50,26 +50,38 @@ export class CoopLink {
     if (!r.ok) throw new Error('poll ' + r.status);
     const j = await r.json();
     this.since = Math.max(this.since, j.last || 0);
-    if (Array.isArray(j.members)) { this.members = j.members; this.o.onMembers && this.o.onMembers(j.members); }
-    for (const m of j.msgs || []) this.recv(m.from, m.body);
+    if (Array.isArray(j.members)) this.members = j.members;
+    for (const m of j.msgs || []) await this.recv(m.from, m.body);
+    if (Array.isArray(j.members)) this.o.onMembers && this.o.onMembers(j.members);
     if (j.state && j.ver > this.ver && !this.linkOpen('host')) { this.ver = j.ver; this.o.onState && this.o.onState(j.state); }
     this.o.onPoll && this.o.onPoll(j);
     if (j.ended) this.end(true);
   }
   async flush() {
+    if (this.stopped) return;
+    if (this.flushing) return this.flushing;
+    this.flushing = this.flushBatch();
+    try { await this.flushing; } finally { this.flushing = null; }
+  }
+  async flushBatch() {
     const st = this.pendingState && this.o.role === 'host' && Date.now() - this.lastStateRelay > 420 ? this.pendingState : null;
     if (!this.out.length && !st) return;
     const msgs = this.out.splice(0, 40);
     if (st) { this.pendingState = null; this.lastStateRelay = Date.now(); }
-    const r = await fetch(this.o.urls.send, {
-      method: 'POST', credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': this.csrf() },
-      body: JSON.stringify({ token: this.o.token, msgs, ...(st ? { state: st } : {}) }),
-    });
-    if (r.status === 410 || r.status === 403) { this.end(true); return; }
-    if (!r.ok) { this.out.unshift(...msgs); throw new Error('send ' + r.status); }
+    try {
+      const r = await fetch(this.o.urls.send, {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': this.csrf() },
+        body: JSON.stringify({ token: this.o.token, msgs, ...(st ? { state: st } : {}) }),
+      });
+      if (r.status === 410 || r.status === 403) { this.end(true); return; }
+      if (!r.ok) throw new Error('send ' + r.status);
+    } catch (e) {
+      if (!this.stopped) { this.out.unshift(...msgs); if (st && !this.pendingState) this.pendingState = st; }
+      throw e;
+    }
   }
-  relay(to, body) { this.out.push({ to, body }); if (this.out.length === 1) clearTimeout(this.kick), this.kick = setTimeout(() => this.flush().catch(() => {}), 60); }
+  relay(to, body) { if (this.stopped) return; this.out.push({ to, body }); if (this.out.length === 1) clearTimeout(this.kick), this.kick = setTimeout(() => this.flush().catch(() => {}), 60); }
 
   // ---------------------------------------------------------------- messages
   /** Send to one device: 'host', a member token, or '*' (every grown-up). */
@@ -93,9 +105,13 @@ export class CoopLink {
     if (!body || typeof body !== 'object') return;
     if (body.mid) { if (this.seen.has(body.mid)) return; this.seen.add(body.mid); if (this.seen.size > 400) this.seen = new Set([...this.seen].slice(-200)); }
     if (body.t === 'st') { this.o.onState && this.o.onState(body.s); return; }
-    if (body.t === 'rtc-offer') { this.answer(from, body.sdp, body); return; }
-    if (body.t === 'rtc-answer') { const p = this.peers.get(from); if (p) p.pc.setRemoteDescription(fixSdp(body.sdp)).then(() => this.drainIce(p)).catch(e => console.warn('JoyNot direct link: bad answer', e && e.message)); return; }
-    if (body.t === 'rtc-ice') { const p = this.peers.get(from); if (!p) { (this.early = this.early || {})[from] = (this.early[from] || []).concat([body.c]); return; } if (p.pc.remoteDescription) p.pc.addIceCandidate(body.c).catch(() => {}); else p.ice.push(body.c); return; }
+    if (body.t === 'rtc-offer') return this.answer(from, body.sdp, body);
+    if (body.t === 'rtc-answer') { const p = this.peers.get(from); if (p && (!body.id || body.id === p.id)) return p.pc.setRemoteDescription(fixSdp(body.sdp)).then(() => this.drainIce(p)).catch(e => console.warn('JoyNot direct link: bad answer', e && e.message)); return; }
+    if (body.t === 'rtc-ice') {
+      const p = this.peers.get(from);
+      if (!p || (body.id && body.id !== p.id)) { (this.early = this.early || {})[from] = (this.early[from] || []).concat([body]).slice(-100); return; }
+      if (p.pc.remoteDescription) p.pc.addIceCandidate(body.c).catch(() => {}); else p.ice.push(body.c); return;
+    }
     this.o.onMsg && this.o.onMsg(from, body);
   }
 
@@ -109,17 +125,20 @@ export class CoopLink {
     if (this.media.audio) { const tr = p.pc.addTransceiver('audio', { direction: 'sendrecv' }); p.tr.audio = tr; if (this.micTrack) tr.sender.replaceTrack(this.micTrack).catch(() => {}); }
     if (this.o.screen) { const tr = p.pc.addTransceiver('video', { direction: 'sendonly' }); p.tr.screen = tr; if (this.screenTrack) tr.sender.replaceTrack(this.screenTrack).catch(() => {}); }
     if (this.media.video) { const tr = p.pc.addTransceiver('video', { direction: 'sendrecv' }); p.tr.cam = tr; if (this.camTrack) tr.sender.replaceTrack(this.camTrack).catch(() => {}); }
-    p.pc.createOffer().then(o => p.pc.setLocalDescription(o)).then(() => this.relay(token, { t: 'rtc-offer', sdp: p.pc.localDescription, screen: !!this.o.screen, cam: !!this.media.video })).catch(() => {});
+    p.pc.createOffer().then(o => p.pc.setLocalDescription(o)).then(() => this.relay(token, { t: 'rtc-offer', id: p.id, sdp: p.pc.localDescription, screen: !!this.o.screen, cam: !!this.media.video })).catch(() => {});
   }
+  /** A returning member has a new browser connection even when its token is unchanged. */
+  reconnect(token) { this.drop(token); this.connect(token); }
   async answer(from, sdp, info = {}) {
     if (!this.rtcOk) return;
     if (this.o.role === 'member') this.hostToken = from;
-    const old = this.peers.get(from); if (old) { try { old.pc.close(); } catch (e) {} this.peers.delete(from); }
+    this.drop(from);
     const p = this.peer(from);
+    p.id = info.id || p.id;
     if (info.screen !== undefined) p.hasScreen = !!info.screen;
-    if (this.early && this.early[from]) { p.ice.push(...this.early[from]); delete this.early[from]; }
+    if (this.early && this.early[from]) { p.ice.push(...this.early[from].filter(b => !b.id || b.id === p.id).map(b => b.c)); delete this.early[from]; }
     p.pc.ondatachannel = e => this.wire(from, p, e.channel);
-    try { await p.pc.setRemoteDescription(fixSdp(sdp)); this.drainIce(p); this.mediaAnswer(p); const a = await p.pc.createAnswer(); await p.pc.setLocalDescription(a); this.relay(from, { t: 'rtc-answer', sdp: p.pc.localDescription }); } catch (e) { console.warn("JoyNot direct link: could not answer", e && e.message); }
+    try { await p.pc.setRemoteDescription(fixSdp(sdp)); this.drainIce(p); this.mediaAnswer(p); const a = await p.pc.createAnswer(); await p.pc.setLocalDescription(a); this.relay(from, { t: 'rtc-answer', id: p.id, sdp: p.pc.localDescription }); } catch (e) { console.warn("JoyNot direct link: could not answer", e && e.message); }
   }
   /** Grown-up side: answer the kid's tracks (send our mic, and our camera on the camera track). */
   mediaAnswer(p) {
@@ -179,10 +198,19 @@ export class CoopLink {
   }
   peer(token) {
     const pc = new RTCPeerConnection({ iceServers: this.o.ice && this.o.ice.length ? this.o.ice : ICE });
-    const p = { pc, ch: null, open: false, ice: [], tr: { audio: null, screen: null, cam: null } };
+    const p = { pc, id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, ch: null, open: false, ice: [], tr: { audio: null, screen: null, cam: null } };
     pc.ontrack = e => { const tag = this.tagOf(p, e.transceiver) || e.track.kind; this.o.onTrack && this.o.onTrack(token, e.track, e.streams && e.streams[0], tag); };
-    pc.onicecandidate = e => { if (e.candidate) this.relay(token, { t: 'rtc-ice', c: e.candidate.toJSON ? e.candidate.toJSON() : e.candidate }); };
-    pc.onconnectionstatechange = () => { if (['failed', 'closed', 'disconnected'].includes(pc.connectionState)) { p.open = false; this.o.onLink && this.o.onLink(token, false); } };
+    pc.onicecandidate = e => { if (e.candidate && this.peers.get(token) === p) this.relay(token, { t: 'rtc-ice', id: p.id, c: e.candidate.toJSON ? e.candidate.toJSON() : e.candidate }); };
+    pc.onconnectionstatechange = () => {
+      if (this.peers.get(token) !== p) return;
+      clearTimeout(p.retry);
+      if (['failed', 'closed', 'disconnected'].includes(pc.connectionState)) {
+        p.open = false; this.o.onLink && this.o.onLink(token, false);
+        if (this.o.role === 'host' && !this.stopped) p.retry = setTimeout(() => {
+          if (!this.stopped && this.peers.get(token) === p && this.members.some(m => m.token === token)) this.reconnect(token);
+        }, pc.connectionState === 'disconnected' ? 10000 : 3000);
+      }
+    };
     this.peers.set(token, p);
     return p;
   }
@@ -193,12 +221,12 @@ export class CoopLink {
     ch.onclose = () => { p.open = false; this.o.onLink && this.o.onLink(token, false); };
     ch.onmessage = e => { try { this.recv(token, JSON.parse(e.data)); } catch (er) {} };
   }
-  drop(token) { const p = this.peers.get(token); if (p) { try { p.pc.close(); } catch (e) {} this.peers.delete(token); } }
+  drop(token) { const p = this.peers.get(token); if (p) { this.peers.delete(token); clearTimeout(p.retry); try { p.pc.close(); } catch (e) {} } }
 
   // ---------------------------------------------------------------- the end
   end(remote = false) {
     if (this.stopped) return;
-    this.stopped = true; clearTimeout(this.timer);
+    this.stopped = true; clearTimeout(this.timer); clearTimeout(this.kick); this.out.length = 0; this.pendingState = null;
     for (const t of [...this.peers.keys()]) this.drop(t);
     if (!remote) {
       const fd = new FormData(); fd.append('token', this.o.token); fd.append('_token', this.csrf());

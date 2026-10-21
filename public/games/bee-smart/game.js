@@ -16,7 +16,6 @@ import { WHY, DANGERS, FLOWERS, CRITTERS, REAL_LIT } from './facts.js';
 import { makeHive } from './hive.js';
 import { makeGuide } from './guide.js';
 import { coopHost } from './coop.js';
-import { kidTogether } from './together.js';
 
 const INK = '#2b2350';
 const font = (px, w = 700) => `${w} ${Math.round(px)}px Fredoka, Andika, system-ui, sans-serif`;
@@ -30,18 +29,6 @@ function createGame(api) {
     state: () => S, shoo, plant, gold, hint: () => S && S.chal && S.chal.hint(), cheer,
     joined: g => { chime(`🐝 <b>${g.name}</b> joined your hive!`, '🐝', { ms: 5000 }); Sfx.levelUp(); refreshActions(); },
     left: g => { api.toast(`👋 ${g.name} flew home.`); refreshActions(); },
-    // play together: talk, chat, pointing, video (Grown-ups → Bee Smart → Play together switches)
-    chat: m => { together.onChat(m); refreshActions(); },
-    talking: (g, on) => together.onTalking(g, on),
-    selfTalking: (on, mode) => together.selfTalking(on, mode),
-    point: (at, g) => { if (S && S.mode === 'chal' && S.chal) { S.chal.point(at, g); coop.flyTo(g, S.bee.x, S.bee.y); } },
-    video: (tk, track, g) => together.onVideo(tk, track, g),
-    camera: g => together.onCamera(g),
-    features: () => refreshActions(),
-  });
-  const together = kidTogether(api, {
-    reads: (api.kid || {}).reads, send: text => coop.chat(text), guards: () => coop.guards(),
-    onOpen: on => { if (S) S.chatOpen = on; if (!on) { flushChimes(); refreshActions(); } },
   });
   const playTogether = () => coop.features().talk && coop.count() > 0;
   function refreshActions() { if (S && S.mode === 'field' && !S.guide) fieldActions(); }
@@ -121,7 +108,6 @@ function createGame(api) {
   }
   function fieldActions() {
     const list = [{ key: 'guide', label: '📖' }, { key: 'say', label: '🔊' }];
-    if (playTogether()) list.push({ key: 'chat', label: `💬${together.unread ? `<i class="bs-badge">${together.unread}</i>` : ''}` }, { key: 'talk', label: '🎙️ Hold', big: true });
     api.actions(list);
   }
   function setGoal() {
@@ -205,7 +191,7 @@ function createGame(api) {
       stage, flower: f.e, boss: S.o.boss,
       extra: () => (playTogether() ? [
         { ic: '🎙️', hold: true, down: () => { S.micHeld = true; }, up: () => { S.micHeld = false; } },
-        { ic: '🙋', fn: () => { coop.chat('🤔 Help me!').then(m => m && together.onChat(m)).catch(() => {}); api.toast('🙋 You asked for help!', 1800); } },
+        { ic: '🙋', fn: () => { coop.chat('🤔 Help me!'); api.toast('🙋 You asked for help!', 1800); } },
       ] : []),
       onDone: res => {
         if (res.demo) { const it2 = it.fam === 'lit' ? litItem(it.lvl) : mathItem(it.lvl); launch(f, it2, 'we', review, false); return; }
@@ -323,7 +309,6 @@ function createGame(api) {
     if (api.input.pressed('say')) api.speak(strip(document.querySelector('.pg-goal')?.innerHTML || ''));
     // hold-to-talk (field button, or 🎙️ in a puzzle)
     if (api.input.held('talk') || S.micHeld) coop.talkDown(); else if (coop.talking) coop.talkUp();
-    if (api.input.pressed('chat') && S.mode === 'field') { together.toggle(); refreshActions(); }
     if (S.chatOpen) return;
     if (api.input.pressed('guide') && S.mode === 'field') { S.guide = makeGuide(api, { bee: B(), save, onClose: () => { S.guide = null; flushChimes(); refreshActions(); } }); }
     if (S.guide) return;
@@ -481,7 +466,6 @@ function createGame(api) {
   const inR = (r, x, y) => r && x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
   function onTap(x, y) {
     if (!S) return;
-    coop.resumeAudio();
     if (S.guide) { S.guide.tap(x, y); return; }
     if (S.mode === 'intro') { if (inR(S.introBtn, x, y)) { api.voice.stop(); Sfx.click(); enterField(false); } return; }
     if (S.mode === 'chal') { S.chal && S.chal.tap(x, y); return; }
@@ -498,7 +482,7 @@ function createGame(api) {
   return {
     start, update, draw, onTap, onMove, onUp,
     tapZone: () => true,
-    stop() { coop.stop(); coop.talkUp(); together.close(); together.reset(); S = null; api.progress(null); },
+    stop() { coop.stop(); coop.talkUp(); coop.closeChat(); S = null; api.progress(null); },
     checkpoint() {
       // out of hearts: this field trip starts over (honey already in the hive is safe)
       if (!S) return;

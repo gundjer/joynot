@@ -22,7 +22,7 @@ export function buildNight(night, settings = {}) {
   const set = (x, y, v) => { tiles[y * W + x] = v; };
 
   // rooms
-  const themes = shuffle([...THEMES]);
+  const themes = ['dining', 'stage', 'arcade', ...shuffle(THEMES.filter(t => !['dining', 'stage', 'arcade'].includes(t)))];
   for (let ry = 0; ry < RH; ry++) for (let rx = 0; rx < RW; rx++) {
     const id = w.rooms.length;
     const theme = themes[id % themes.length];
@@ -32,9 +32,8 @@ export function buildNight(night, settings = {}) {
   }
   const R = (rx, ry) => w.rooms[ry * RW + rx];
 
-  // start room = a corner
-  const corners = [R(0, 0), R(RW - 1, 0), R(0, RH - 1), R(RW - 1, RH - 1)];
-  const start = corners[rnd(4)];
+  // Begin in dining, with the show stage next door as the first visual clue.
+  const start = R(0, 0);
 
   // spanning tree (random DFS) + a couple of loops
   const edges = new Set(); const key = (a, b) => a < b ? `${a}-${b}` : `${b}-${a}`;
@@ -46,6 +45,7 @@ export function buildNight(night, settings = {}) {
     if (!opts.length) { stack.pop(); continue; }
     const nx = opts[rnd(opts.length)]; seen.add(nx.id); edges.add(key(cur.id, nx.id)); stack.push(nx);
   }
+  edges.add(key(start.id, R(1, 0).id));
   const extra = night === 1 ? 1 : 2;
   for (let i = 0, tries = 0; i < extra && tries < 50; tries++) {
     const r = w.rooms[rnd(w.rooms.length)], n = nbrs(r)[rnd(nbrs(r).length)];
@@ -62,6 +62,7 @@ export function buildNight(night, settings = {}) {
     if (A.ry === B.ry) { const L = A.rx < B.rx ? A : B; const x = (L.rx + 1) * CW; door.orient = 'v'; door.tiles = [[x, L.ry * CH + 3], [x, L.ry * CH + 4]]; }
     else { const T0 = A.ry < B.ry ? A : B; const y = (T0.ry + 1) * CH; door.orient = 'h'; door.tiles = [[T0.rx * CW + 4, y], [T0.rx * CW + 5, y]]; }
     door.locked = Math.random() < pLock;
+    if (a === start.id && b === R(1, 0).id) door.locked = false;
     door.kind = door.locked ? kindFor() : null;
     door.open = !door.locked;
     A.adj.push(B.id); B.adj.push(A.id);
@@ -121,7 +122,7 @@ export function buildNight(night, settings = {}) {
   cellRooms.forEach(r => { const p = r.free.pop(); w.items.push({ type: 'cell', x: p[0] + 0.5, y: p[1] + 0.5 }); });
   w.rooms.forEach((r, i) => {
     if (r !== start && i % 2 === 0 && r.free.length) { const p = r.free.pop(); w.items.push({ type: 'battery', x: p[0] + 0.5, y: p[1] + 0.5 }); }
-    for (let k = 0; k < 2 && r.free.length; k++) { const p = r.free.pop(); w.items.push({ type: 'token', x: p[0] + 0.5, y: p[1] + 0.5 }); }
+    for (let k = 0; k < 3 && r.free.length; k++) { const p = r.free.pop(); w.items.push({ type: 'coin', x: p[0] + 0.5, y: p[1] + 0.5 }); }
   });
 
   w.startPos = { x: start.x0 + 4, y: start.y0 + 3 };

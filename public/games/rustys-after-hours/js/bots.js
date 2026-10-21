@@ -4,6 +4,7 @@
 // legs → body → arms → head → eyes → bow. Pictures come from animatronics.js (same style as the cast).
 import { drawRobot } from './animatronics.js';
 import { getTier } from './characters.js';
+import { drawRobotPreview, drawComponentPreview } from './scene3d.js';
 
 export const KINDS = {
   bunny: { name: 'Bunny', ears: 'long' },
@@ -17,12 +18,12 @@ export const COLORS = ['#4fb6ff', '#ff7ab8', '#7ed957', '#ffb84a', '#b28cff', '#
 export const COLOR_WORDS = { '#4fb6ff': 'blue', '#ff7ab8': 'pink', '#7ed957': 'green', '#ffb84a': 'orange', '#b28cff': 'purple', '#ff6b5b': 'red' };
 export const NAMES = ['Bolt', 'Sunny', 'Patch', 'Gizmo', 'Buttons', 'Sprocket', 'Pip', 'Tinker', 'Nova', 'Zippy', 'Cog', 'Daisy'];
 export const PARTS = [
-  { id: 'legs', label: 'legs', word: 'legs' },
-  { id: 'body', label: 'body', word: 'body' },
-  { id: 'arms', label: 'arms', word: 'arms' },
-  { id: 'head', label: 'head', word: 'head' },
-  { id: 'eyes', label: 'eyes', word: 'eyes' },
-  { id: 'bow', label: 'bow tie', word: 'bow tie' },
+  { id: 'legs', label: 'servo legs', word: 'legs' },
+  { id: 'body', label: 'control frame', word: 'body' },
+  { id: 'arms', label: 'arm linkages', word: 'arms' },
+  { id: 'head', label: 'hinged head', word: 'head' },
+  { id: 'eyes', label: 'light sensors', word: 'eyes' },
+  { id: 'bow', label: 'power module', word: 'power' },
 ];
 /** Where each part sits on the bot (units of s/100 from the center). Used to drop parts in the right place. */
 export const SLOTS = { legs: [0, 33], body: [0, 1], arms: [0, 9], head: [0, -42], eyes: [0, -43], bow: [0, -19] };
@@ -39,6 +40,7 @@ export const powersOf = bot => ({ speed: 2, ears: 2, eyes: 2, ...(bot && bot.pow
  * parts (Workshop). mood: 'friendly' (Workshop, helper) or 'chase' (it came to life and is after you).
  */
 export function drawBot(ctx, bot, cx, cy, s, t = 0, { has = null, ghost = false, walking = false, glow = 0, mood = 'friendly', tier = null } = {}) {
+  if (drawRobotPreview(ctx, bot, cx, cy, s, t, { has, walking })) return;
   if (glow > 0) {
     ctx.save(); ctx.globalAlpha = glow;
     const g = ctx.createRadialGradient(cx, cy, 4, cx, cy, s * 0.9); g.addColorStop(0, 'rgba(120,255,220,.55)'); g.addColorStop(1, 'rgba(120,255,220,0)');
@@ -49,6 +51,7 @@ export function drawBot(ctx, bot, cx, cy, s, t = 0, { has = null, ghost = false,
 
 /** Draw just one loose part (floating out of a crate, or being dragged), centered at (cx, cy). */
 export function drawPart(ctx, bot, id, cx, cy, s, t = 0) {
+  if (drawComponentPreview(ctx, bot, id, cx, cy, s * .65, t)) return;
   const [ox, oy] = SLOTS[id] || [0, 0], u = s / 100;
   drawRobot(ctx, { kind: bot.kind || 'bunny', color: bot.color || COLORS[0] }, cx - ox * u, cy - oy * u, s, t, { has: new Set([id]), mood: 'friendly', tier: 0 });
 }

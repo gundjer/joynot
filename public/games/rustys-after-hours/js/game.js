@@ -15,7 +15,8 @@ import { Voice, Ears } from './speech.js';
 import { Sfx } from './audio.js';
 import { buildNight, solidForPlayer, roomAt, lineOfSight } from './world.js';
 import { Monster } from './monsters.js';
-import { Renderer3D } from './render3d.js';
+import { Pizzeria3D as Renderer3D } from './pizzeria3d.js';
+import { mountPrizeCounter, useBattery } from './supplies.js';
 import { CHARACTERS, LINES, castForNight, drawCharacter, introLine, setTier } from './characters.js';
 import { Challenge } from './challenge.js';
 import { exitProblem, FLASHLIGHT_STEPS } from './curriculum-math.js';
@@ -44,7 +45,7 @@ const TIPS = [
 
 const store = Store;
 const tutor = new Tutor(store);
-let renderer, challenge;
+let renderer, challenge, prizes;
 let g = null; // current night state
 let st = null; // current workshop / hallway run
 let mode = 'title';
@@ -63,7 +64,9 @@ const input = { x: 0, y: 0, keys: new Set(), stick: null, aim: null };
 // ------------------------------------------------------------------ boot
 window.addEventListener('load', async () => {
   renderer = new Renderer3D($('game'));
+  window.__rustyRenderer = renderer;
   challenge = new Challenge(store, tutor);
+  prizes = mountPrizeCounter(store, refreshTitle, toast);
   window.__challenge = challenge; // tests
   const resize = () => { renderer.resize(); if (mode === 'title') drawTitleArt(); };
   window.addEventListener('resize', resize);
@@ -75,7 +78,19 @@ window.addEventListener('load', async () => {
   });
   document.addEventListener('gesturestart', e => e.preventDefault());
   document.addEventListener('dblclick', e => e.preventDefault(), { passive: false });
-  store.onExternalChange = () => { applyTier(); refreshTitle(); };
+  store.onExternalChange = ({ reset } = {}) => {
+    if (reset) {
+      if (st && st.dispose) st.dispose();
+      g = null; st = null; window.__game = null; window.__stage = null;
+      challenge.close(false);
+      prizes.close();
+      quitToTitle();
+      toast('Progress reset by your grown-up. Start again at Night 1!', 5000);
+    }
+    applyTier(); refreshTitle();
+  };
+  setInterval(() => { if (!document.hidden && mode !== 'loading' && mode !== 'leaving') store.sync(); }, 5000);
+  window.addEventListener('focus', () => store.sync());
   window.addEventListener('pagehide', () => store.beacon());
   bindUI();
   requestAnimationFrame(loop);
@@ -125,7 +140,7 @@ function refreshTitle() {
   const hi = (d.tokens || d.stats.nights) ? 'Welcome back' : 'Welcome';
   $('titleName').textContent = d.name && d.name !== 'Player' ? `${hi}, ${d.name}!` : `${hi}, night guard!`;
   const k = stageKind(), S = STAGE_INFO[k], bots = (d.bots || []).length;
-  $('titleStats').innerHTML = `📖 Reading level <b>${d.reading.level}</b> <small>(${ri.name})</small> &nbsp; 🔢 Math level <b>${d.math.level}</b> <small>(${mi.name})</small><br>★ <b>${d.tokens}</b> tokens${bots ? ` &nbsp; 🤖 <b>${bots}</b> robot${bots === 1 ? '' : 's'} built` : ''}`;
+  $('titleStats').innerHTML = `📖 Reading level <b>${d.reading.level}</b> <small>(${ri.name})</small> &nbsp; 🔢 Math level <b>${d.math.level}</b> <small>(${mi.name})</small><br>🪙 <b>${d.tokens}</b> coins · 🔋 ${d.supplies?.batteries || 0} spares${bots ? ` &nbsp; 🤖 <b>${bots}</b> robot${bots === 1 ? '' : 's'} built` : ''}`;
   $('btnPlay').innerHTML = `▶ ${k === 'night' ? `Play Night ${d.night}` : `Play: ${S.name}`}`;
   const byGrade = tier === gradeTier((store.config.kid || {}).grade || (store.config.kid || {}).reads);
   $('titleMode').innerHTML = `<span class="mode-dot"></span>${TIERS[tier].name} · ${byGrade ? 'set by grade' : 'set by a grown-up'}`;
@@ -207,6 +222,11 @@ function bindUI() {
   $('btnNextNight').addEventListener('click', () => { hide('done'); startStage(); });
   $('btnDoneTitle').addEventListener('click', () => { hide('done'); quitToTitle(); });
   $('btnLight').addEventListener('click', () => toggleLight());
+  $('btnPrizes').addEventListener('click', () => prizes.open());
+  $('btnSpare').addEventListener('click', () => {
+    if (useBattery(store.data, g)) { store.save(); $('btnLight').classList.remove('off'); Sfx.pickup(); toast('Spare battery fitted. Flashlight full!'); updateHUD(); }
+    else toast(g && g.battery >= 95 ? 'Your flashlight is already full.' : 'Buy spare batteries at the prize counter.');
+  });
   // 🗣️ Voice: any voice installed on this device (saved on this device, same as Grown-ups → Account)
   const vSel = $('gVoiceSel'), vRate = $('gVoiceRate');
   const openVoice = from => { Voice.unlock(); fillVoiceSelect(vSel); vRate.value = String(getPref().rate || 1); $('voicePick').dataset.from = from; hide(from); show('voicePick'); };
@@ -289,12 +309,12 @@ function goFullscreen() {
 // ------------------------------------------------------------------ night flow
 function startNightIntro() {
   hide('title'); mode = 'intro'; Voice.stop();
-  const n = store.data.night; const cast = castForNight(n);
+  const n = store.data.night; const cast = [castForNight(n).slice(-1)[0]];
   $('introNight').textContent = `Night ${n}`;
   const need = n === 1 ? 2 : 3;
   $('introGoal').innerHTML = tier === 0
-    ? `Find <b>${need} power cells</b> ⚡, then go out the green <b>EXIT</b>! Play hide-and-seek with ${CHARACTERS[cast[0]].name.split(' ')[0]}!`
-    : `Find <b>${need} power cells</b> ⚡, then escape through the <b>EXIT</b>!`;
+    ? `<b>${CHARACTERS[cast[0]].name}</b> is missing from the stage! Find <b>${need} power cells</b> ⚡ and the green <b>EXIT</b>. Collect batteries for your flashlight and coins for prizes.`
+    : `<b>${CHARACTERS[cast[0]].name}</b> is missing from the stage and roaming the shop. Find <b>${need} power cells</b> ⚡, then escape through the <b>EXIT</b>! Collect batteries and gold coins along the way.`;
   const wrap = $('introCast'); wrap.innerHTML = '';
   const draws = [];
   cast.forEach(id => {
@@ -359,7 +379,7 @@ function beginNight(opt = {}) {
   if (bot) { // your robot starts in the farthest room and searches for you
     const pw = { speed: 2, ears: 2, eyes: 2, ...(bot.powers || {}) }, r = far[0];
     g.monsters.push(new Monster('bot', r.x0 + 4.5, r.y0 + 3.5, { bot, vision: 3 + pw.eyes * 0.9, hear: 1.6 + pw.ears * 1.1, speedK: 1 }));
-  } else castForNight(n).forEach((id, i) => { const r = far[i % far.length]; g.monsters.push(new Monster(id, r.x0 + 4.5, r.y0 + 3.5)); });
+  } else { const id = castForNight(n).slice(-1)[0], r = far[0]; g.monsters.push(new Monster(id, r.x0 + 4.5, r.y0 + 3.5)); }
   renderer.setWorld(world, tier);
   window.__game = g;
   show('hud'); show('controls');
@@ -400,6 +420,7 @@ function playAgain() {
   startStage();
 }
 function quitToTitle() {
+  if (st && st.dispose) st.dispose();
   Voice.stop(); Ears.stop(); Sfx.stopAmbient();
   ['pause', 'hud', 'controls', 'caught', 'done', 'steps', 'intro', 'quitConfirm', 'scare', ...STAGE_UI].forEach(hide);
   input.x = input.y = 0; input.stick = null; input.aim = null; input.keys.clear();
@@ -428,6 +449,10 @@ async function doAction() {
 
 async function openDoor(door) {
   const w = g.world;
+  if (door.open) {
+    if (door.exit) nightComplete();
+    return;
+  }
   if (door.exit && g.cells < w.cellsNeeded) {
     const left = w.cellsNeeded - g.cells;
     sparkyTalk(`The exit needs power! Find ${left} more power ${left === 1 ? 'cell' : 'cells'}.`);
@@ -446,7 +471,9 @@ async function openDoor(door) {
     if (door.item.track === 'reading') g.stepsRead++; else g.stepsMath++;
     door.open = true; door.item = null; Sfx.door();
     g.graceUntil = Math.max(g.graceUntil, g.time + 2);
-    if (door.exit) sparkyTalk('The exit is open! Run through it!');
+    // Solving the exit is the final action; don't require another movement
+    // into the narrow boundary tiles to finish the night.
+    if (door.exit) nightComplete();
   }
 }
 
@@ -509,13 +536,14 @@ function respawn() {
 }
 
 function nightComplete() {
+  if (!g || mode !== 'play') return;
   if (g.chaseBot) return seekDone();
   mode = 'done'; Voice.stop(); Sfx.stopAmbient(); Sfx.win();
   const d = store.data; d.stats.nights++; d.night++; d.tokens += 10;
   advance();
   const stars = g.caught === 0 ? 3 : g.caught <= 2 ? 2 : 1;
   $('doneStars').textContent = '★'.repeat(stars) + '☆'.repeat(3 - stars);
-  $('doneStats').innerHTML = `📖 Doors read: <b>${g.stepsRead}</b><br>🔢 Gates solved: <b>${g.stepsMath}</b><br>🔦 Animatronics zapped: <b>${g.zaps}</b><br>★ Tokens earned: <b>${d.tokens - g.tokensAtStart}</b>`;
+  $('doneStats').innerHTML = `📖 Doors read: <b>${g.stepsRead}</b><br>🔢 Gates solved: <b>${g.stepsMath}</b><br>🔦 Animatronics zapped: <b>${g.zaps}</b><br>🪙 Coins earned: <b>${d.tokens - g.tokensAtStart}</b>`;
   hide('hud'); hide('controls'); show('done');
   $('btnNextNight').textContent = `🔧 Next level: ${STAGE_INFO.build.name}`;
   speakSparky(`You escaped! Great job! You read ${g.stepsRead} doors and solved ${g.stepsMath} gates. Next level: the Robot Workshop! You get to build your own animatronic!`);
@@ -533,8 +561,11 @@ function loop(now) {
   }
   if (g) {
     if (mode === 'play') update(dt);
-    renderer.draw(g);
-    g.mmT -= dt; if (g.mmT <= 0) { g.mmT = 0.25; renderer.minimap($('minimap'), g); updateHUD(); }
+    // Completing Hide & Seek clears g during update.
+    if (g) {
+      renderer.draw(g);
+      g.mmT -= dt; if (g.mmT <= 0) { g.mmT = 0.25; renderer.minimap($('minimap'), g); updateHUD(); }
+    }
   }
   requestAnimationFrame(loop);
 }
@@ -574,13 +605,15 @@ function update(dt) {
   // ---- items
   for (const it of w.items) {
     if (it.taken || Math.hypot(it.x - p.x, it.y - p.y) > 0.6) continue;
+    if (it.type === 'battery' && g.battery >= 95) continue;
     it.taken = true;
     if (it.type === 'cell') {
       g.cells++; Sfx.power();
       const left = w.cellsNeeded - g.cells;
       sparkyTalk(left > 0 ? `Power cell! ${left} more to go.` : 'All the power cells! Now find the EXIT!');
     } else if (it.type === 'battery') { g.battery = 100; Sfx.pickup(); toast('🔋 Flashlight battery full!'); }
-    else { store.data.tokens++; Sfx.pickup(); }
+    else { store.data.tokens++; Sfx.pickup(); toast('🪙 +1 coin · Spend it at the prize counter', 1200); }
+    store.save();
   }
 
   // ---- nearby things
@@ -588,7 +621,7 @@ function update(dt) {
   if (!p.hidden) {
     let best = 1.35;
     for (const d of w.doors) {
-      if (d.open) continue;
+      if (d.open && !d.exit) continue;
       for (const [tx, ty] of d.tiles) { const dd = Math.hypot(tx + 0.5 - p.x, ty + 0.5 - p.y); if (dd < best) { best = dd; g.nearDoor = d; } }
     }
     if (!g.nearDoor) { let hb = 1.3; for (const h of w.hides) { const dd = Math.hypot(h.x + 0.5 - p.x, h.y + 0.5 - p.y); if (dd < hb) { hb = dd; g.nearHide = h; } } }
@@ -596,7 +629,7 @@ function update(dt) {
   if (w.exit.open) for (const [tx, ty] of w.exit.tiles) if (Math.hypot(tx + 0.5 - p.x, ty + 0.5 - p.y) < 0.95) { nightComplete(); return; }
 
   // ---- flashlight battery (drains slowly in Gentle mode, where the lights are on)
-  if (g.lightOn && !p.hidden) { g.battery -= dt * (tier === 0 ? 0.5 : 1.5); if (g.battery <= 0) { g.battery = 0; g.lightOn = false; $('btnLight').classList.add('off'); sparkyTalk('Your flashlight battery ran out! Turn it off to let it charge, or find a battery.'); } }
+  if (g.lightOn && !p.hidden) { g.battery -= dt * (tier === 0 ? 0.5 : 1.5) * (store.data.supplies?.lens ? .65 : 1); if (g.battery <= 0) { g.battery = 0; g.lightOn = false; $('btnLight').classList.add('off'); sparkyTalk('Your flashlight battery ran out! Find a green battery, or use a spare from the prize counter.'); } }
   else g.battery = Math.min(100, g.battery + dt * 3);
 
   // ---- monsters
@@ -649,7 +682,8 @@ function zap(m) {
 function updateHUD() {
   if (!g) return;
   $('hudCells').textContent = `⚡ ${g.cells}/${g.world.cellsNeeded}`;
-  $('hudTokens').textContent = `★ ${store.data.tokens}`;
+  $('hudTokens').textContent = `🪙 ${store.data.tokens}`;
+  $('btnSpare').textContent = `🔋 ${store.data.supplies?.batteries || 0}`;
   const b = $('hudBattery'); b.style.width = g.battery + '%'; b.style.background = g.battery < 20 ? '#e53935' : g.battery < 50 ? '#fdd835' : '#7cd67c';
   const act = $('btnAction'); const p = g.player;
   if (p.hidden) { act.textContent = '🚪 Come out'; act.className = 'act'; }
@@ -717,6 +751,8 @@ function beginStage() {
     onLevelUp: () => levelUp(),
   };
   if (k === 'chase') { const bot = (d.bots || []).slice(-1)[0]; if (bot) { beginNight({ bot }); return; } return startStage(); }
+  if (st && st.dispose) st.dispose();
+  g = null; window.__game = null;
   st = new Workshop({ ...env, firstTime: !(d.bots || []).length, onDone: bot => buildDone(bot) });
   window.__stage = st;
   show('stageHud'); show('stageTouch');
@@ -734,13 +770,14 @@ function stageHud() {
 }
 /** The animatronic woke up: save it and go straight to the next level, where it chases you. */
 function buildDone(bot) {
+  if (st && st.dispose) st.dispose();
   const d = store.data;
   d.bots = [...(d.bots || []), bot].slice(-12); d.builds = (d.builds | 0) + 1; d.tokens += 10;
   advance();
   Art.preload(tier, [bot]);
-  st = null; Sfx.stopAmbient();
+  st = null; window.__stage = null; Sfx.stopAmbient();
   hide('stageHud'); hide('stageTouch'); hide('runBtns');
-  toast(`🤖 ${bot.name} is alive! ★ +10 tokens`, 3000);
+  toast(`🤖 ${bot.name} is alive! 🪙 +10 coins`, 3000);
   startStage();
 }
 /** Escaped your own animatronic in Hide & Seek. */
@@ -753,7 +790,7 @@ function seekDone() {
   advance();
   hide('hud'); hide('controls');
   g = null; window.__game = null;
-  stageDone(`🙈 You beat ${bot.name}!`, `📖 Doors read: <b>${s.stepsRead}</b><br>🔢 Gates solved: <b>${s.stepsMath}</b><br>🔦 Times you made it run: <b>${s.zaps}</b><br>★ +${10 + bonus} tokens${bonus ? ' (tough robot bonus!)' : ''}<br>🤖 ${bot.name} is your helper now!`,
+  stageDone(`🙈 You beat ${bot.name}!`, `📖 Doors read: <b>${s.stepsRead}</b><br>🔢 Gates solved: <b>${s.stepsMath}</b><br>🔦 Times you made it run: <b>${s.zaps}</b><br>🪙 +${10 + bonus} coins${bonus ? ' (tough robot bonus!)' : ''}<br>🤖 ${bot.name} is your helper now!`,
     ctx => { drawBot(ctx, bot, 140, 130, 125, 0, { mood: 'friendly' }); ctx.font = '60px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif'; ctx.fillText('🏆', 300, 140); });
   speakSparky(`You escaped! You read ${s.stepsRead} doors and solved ${s.stepsMath} gates. ${bot.name} is your helper now! Next up: Night ${d.night}!`);
 }

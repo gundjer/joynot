@@ -2,6 +2,7 @@
 // Jobs: 🛡️ Guard (tap hornets to shoo them), 🌱 Gardener (tap grass to plant a flower, tap a flower to make it golden),
 // 💡 Coach (during a puzzle: light up a hint and read the coaching tip — never the answer). Everyone can cheer and fan honey.
 import { CoopLink } from '../_play/coop-link.js';
+import { memberTools } from './member-tools.js';
 import { emoji, roundRect, label, clamp } from '../_play/play.js';
 import { WORLDS, WW, WH, HIVE, buildScenery, drawWorld, drawLeaves, drawHornet, drawBee } from './worlds.js';
 
@@ -61,6 +62,7 @@ async function join(name) {
 
 // ------------------------------------------------ playing
 function play() {
+  let tools;
   $('#guard').innerHTML = `${header()}<div class="stage"><canvas id="cv"></canvas></div>
     <div class="panel"><div class="row"><button class="job" id="job" type="button" style="--c:${esc(me.color)}"></button><span class="tip" id="tip"></span></div>
     <div id="coach"></div>
@@ -68,7 +70,7 @@ function play() {
     <div class="toast" id="toast"></div>`;
   $('#leave').onclick = () => { if (link) link.end(); location.href = C.urls.back; };
   const nm = document.createElement('button'); nm.type = 'button'; nm.textContent = `✏️ ${me.name}`; nm.style.background = me.color; $('#leave').before(nm);
-  nm.onclick = () => { if (link) { link.stopped = true; [...link.peers.keys()].forEach(k => link.drop(k)); } nameScreen(); };
+  nm.onclick = () => { if (link) link.end(true); nameScreen(); };
   toast(`🐝 You joined as ${me.name}!`);
   $('#job').onclick = () => { job = (job + 1) % JOBS.length; showJob(); };
   $('#cheer').onclick = () => act('cheer', {}, '🎉 You cheered!');
@@ -80,7 +82,16 @@ function play() {
   const cv = $('#cv');
   cv.addEventListener('pointerdown', e => { const r = cv.getBoundingClientRect(); tap(e.clientX - r.left, e.clientY - r.top); });
   showJob(); panel();
-  link = new CoopLink({ urls: C.urls, token: me.token, role: 'member', onState, onMsg: () => {}, onMembers, onLink: (tk, open) => { net = open ? 'direct' : 'relay'; netPill(); }, onEnded: () => endedScreen(`${KID.name} stopped playing. Thanks for helping the hive!`) });
+  link = new CoopLink({ urls: C.urls, token: me.token, role: 'member', ice: C.ice,
+    onState: s => { onState(s); tools.state(s); }, onMsg: (from, body) => tools.message(from, body),
+    onPoll: j => tools.poll(j), onTrack: (...args) => tools.track(...args), onMembers,
+    onLink: (tk, open) => { net = open ? 'direct' : 'relay'; netPill(); tools.connected(open); },
+    onEnded: () => { tools.stop(); endedScreen(`${KID.name} stopped playing. Thanks for helping the hive!`); },
+  });
+  tools = memberTools(link, C, toast);
+  window.__joynotLink = link;
+  const leave = $('#leave').onclick; $('#leave').onclick = () => { tools.stop(); leave(); };
+  const rename = nm.onclick; nm.onclick = () => { tools.stop(); rename(); };
   link.start();
   addEventListener('pagehide', () => link && link.end());
   requestAnimationFrame(loop);
