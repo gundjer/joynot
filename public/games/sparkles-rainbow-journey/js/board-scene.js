@@ -91,7 +91,7 @@ export class BoardScene {
     const atlas = document.createElement('canvas'); atlas.width = atlas.height = 1024; const ctx = atlas.getContext('2d');
     for (let n = 1; n <= 60; n++) { const x = (n - 1) % 8 * 128, y = Math.floor((n - 1) / 8) * 128;
       ctx.fillStyle = '#403854'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = 'bold 65px Trebuchet MS,sans-serif'; ctx.fillText(String(n), x + 64, y + 58);
-      if (CANDY.includes(n)) { ctx.fillStyle = '#b05376'; ctx.font = 'bold 15px sans-serif'; ctx.fillText('CANDY', x + 64, y + 100); }
+      if (CANDY.includes(n)) { ctx.fillStyle = '#527653'; ctx.font = 'bold 15px sans-serif'; ctx.fillText('TRAIL', x + 64, y + 100); }
       if (n === 60) { ctx.fillStyle = '#b4943b'; ctx.font = 'bold 14px sans-serif'; ctx.fillText('FINISH', x + 64, y + 100); }
     }
     this.atlas = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, this.atlas); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, atlas);

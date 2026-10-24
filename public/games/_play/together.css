@@ -6,7 +6,7 @@
 .jt-pop { position: fixed; left: 50%; top: calc(64px + env(safe-area-inset-top)); transform: translateX(-50%); z-index: 61; width: min(92vw, 520px); background: #fffdf3; color: #2b2350; border: 3px solid #f5b301; border-radius: 16px; padding: 10px 14px; font-size: 18px; box-shadow: 0 6px 18px rgba(0,0,0,.25); cursor: pointer; word-break: break-word; }
 .jt-videos { position: fixed; left: calc(10px + env(safe-area-inset-left)); top: calc(104px + env(safe-area-inset-top)); z-index: 59; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
 .jt-vid { position: relative; width: 108px; height: 108px; border-radius: 50%; overflow: hidden; border: 4px solid var(--c, #8b6cff); background: #222; box-shadow: 0 4px 12px rgba(0,0,0,.3); }
-.jt-vid video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+.jt-vid video { width: 100%; height: 100%; object-fit: cover; }
 .jt-vid span { position: absolute; left: 50%; bottom: 4px; transform: translateX(-50%); background: var(--c, #8b6cff); color: #fff; font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
 .jt-points { position: fixed; inset: 0; z-index: 58; pointer-events: none; }
 .jt-point { position: absolute; width: 0; height: 0; }
@@ -46,6 +46,8 @@
   .jt-log { max-height: 26vh; } .jt-quick { grid-template-columns: repeat(6, 1fr); } .jt-quick button { font-size: 12px; } .jt-quick button span { font-size: 22px; }
 }
 /* video call: the grown-up's face, and a small "You" bubble for the kid's own camera */
-.jt-vid img { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+.jt-vid img { width: 100%; height: 100%; object-fit: cover; }
 .jt-vid.jt-self { width: 72px; height: 72px; border-color: #2fae66; --c: #2fae66; opacity: .92; }
 @media (max-height: 500px) { .jt-vid.jt-self { width: 56px; height: 56px; } }
+
+.jt-vid video,.jt-vid img{transform:none;image-orientation:from-image}.jt-self video{transform:scaleX(-1)}.jt-rotate{position:absolute;right:3px;top:3px;border:1px solid #ddd;background:#fff9ed;color:#304e43;border-radius:50%;width:29px;height:29px;font-size:18px;cursor:pointer;z-index:3;pointer-events:auto}

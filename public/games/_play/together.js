@@ -10,6 +10,7 @@
 // coturn relay when two homes can't connect directly). If no direct link is possible, small JPEG pictures go through
 // JoyNot instead (about 1 every 1.5 s), and the cameras send a small picture about every 1.5 s too.
 import { CoopLink } from './coop-link.js';
+import {cameraTurn,readCameraTurn,saveCameraTurn,applyCameraTurn} from './camera-view.js';
 import { talker, voicePlayer, playClip, sendChat, canTalk } from './coop-voice.js';
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -44,7 +45,7 @@ export function mountTogether(o) {
   const player = voicePlayer(), seenChat = new Set(), log = [];
   let link = null, opening = false, urls = null, token = null, F = { talk: false, video: false }, kidTalk = null, iv = 0, t0 = performance.now();
   let lastFrame = 0, lastStatus = 0, lastRelay = 0, frameId = 0, unread = 0, opened = false, popT = 0, duck = 0, world = '';
-  let cam = null, camAsked = false, screenTrack = null, lastCamRelay = 0;
+  let ownTurn=readCameraTurn('self');let cam = null, camAsked = false, screenTrack = null, lastCamRelay = 0;
   const key = `joynot_coop_${o.game}_${kid.id}`;
   const ss = { get() { try { return JSON.parse(sessionStorage.getItem(key) || 'null'); } catch (e) { return null; } }, set(v) { try { sessionStorage.setItem(key, JSON.stringify(v)); } catch (e) {} } };
   const csrf = () => (o.csrf && o.csrf()) || document.querySelector('meta[name="csrf-token"]')?.content || '';
@@ -55,7 +56,7 @@ export function mountTogether(o) {
   root.id = 'jt';
   root.innerHTML = `
     <div class="jt-pill hidden" id="jtTalk"></div>
-    <div class="jt-videos" id="jtVideos"><div class="jt-vid jt-self hidden" id="jtSelf"><video autoplay playsinline muted></video><span>You</span></div></div>
+    <div class="jt-videos" id="jtVideos"><div class="jt-vid jt-self hidden" id="jtSelf"><video autoplay playsinline muted></video><span>You</span><button id="jtRotateSelf" class="jt-rotate" aria-label="Rotate your camera">↻</button></div></div>
     <div class="jt-points" id="jtPoints"></div>
     <div class="jt-pop hidden" id="jtPop"></div>
     <div class="jt-dock hidden" id="jtDock">
@@ -87,6 +88,7 @@ export function mountTogether(o) {
   tb.addEventListener('contextmenu', e => e.preventDefault());
   addEventListener('pointerdown', () => { player.resume(); root.querySelectorAll('video').forEach(v => { if (v.paused && v.srcObject) v.play().catch(() => {}); }); }, { capture: true });
 
+  $('#jtRotateSelf').onclick=()=>{ownTurn=cameraTurn(ownTurn+90);saveCameraTurn('self',ownTurn);applyCameraTurn($('#jtSelf video'),ownTurn,true);link?.send('*',{t:'cam-turn',turn:ownTurn});};
   const canType = () => { const r = String(kid.reads ?? 'K'); return r !== 'K' && r !== 'PK' && (parseInt(r, 10) || 0) >= 3; };
   function openChat() { opened = true; unread = 0; badge(); const gs = [...G.values()]; $('#jtWho').textContent = gs.length ? `💬 Chat with ${gs.map(g => g.name).join(' & ')}` : '💬 Chat'; $('#jtTyping').classList.toggle('hidden', !canType()); $('#jtChat').classList.remove('hidden'); const b = $('#jtLog'); b.scrollTop = b.scrollHeight; }
   function closeChat() { opened = false; $('#jtChat').classList.add('hidden'); }
@@ -130,7 +132,7 @@ export function mountTogether(o) {
       cam = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 240 }, frameRate: { ideal: 15 } }, audio: false });
       if (!F.video || !G.size || !link || link.stopped) { stopCam(); return; }
       if (link) link.setCam(cam.getVideoTracks()[0]);
-      const v = $('#jtSelf video'); v.srcObject = cam; v.play().catch(() => {});
+      const v = $('#jtSelf video');applyCameraTurn(v,ownTurn,true);link?.send('*',{t:'cam-turn',turn:ownTurn}); v.srcObject = cam; v.play().catch(() => {});
       $('#jtSelf').classList.toggle('hidden', !G.size);
     } catch (e) { cam = null; o.toast && o.toast('📹 Ask a grown-up to allow the camera so they can see you.', 3200); }
     finally { camAsked = false; }
@@ -236,10 +238,10 @@ export function mountTogether(o) {
     }
     if (b.t === 'talk' && F.talk) { setDuck(!!b.on); pill(b.on ? `🎙️ ${g.name} is talking…` : '', g.color); }
     if (b.t === 'voice' && F.talk) playClip(b.url, () => { setDuck(true); pill(`🎙️ ${g.name} is talking…`, g.color); }, () => { setDuck(false); pill(''); });
-    if (b.t === 'cam') { g.cam = !!b.on && F.video; const el = bubble(g.token); el.classList.toggle('hidden', !g.cam); if (!g.cam) { const im = el.querySelector('img'); if (im) im.removeAttribute('src'); } }
+    if (b.t === 'cam') {g.rotation=cameraTurn(b.rotation); g.cam = !!b.on && F.video; const el = bubble(g.token); el.classList.toggle('hidden', !g.cam); if (!g.cam) { const im = el.querySelector('img'); if (im) im.removeAttribute('src'); } }
     // camera picture through JoyNot (no direct link): show it in the grown-up's bubble
     if (b.t === 'camf' && F.video && typeof b.d === 'string' && b.d.startsWith('data:image/jpeg')) {
-      g.cam = true; const el = bubble(g.token); el.classList.remove('hidden');
+      g.rotation=cameraTurn(b.rotation??g.rotation);g.cam = true; const el = bubble(g.token); el.classList.remove('hidden');
       if (!el.dataset.live) { const im = el.querySelector('img'); im.src = b.d; im.classList.remove('hidden'); el.querySelector('video').classList.add('hidden'); }
     }
     if (b.t === 'scr') g.screen = !!b.on; // this grown-up is getting the live game video (so skip the slow pictures)
@@ -252,8 +254,8 @@ export function mountTogether(o) {
   }
   function bubble(tk) {
     const box = $('#jtVideos'); let el = box.querySelector(`[data-tk="${tk}"]`);
-    if (!el) { el = document.createElement('div'); el.className = 'jt-vid hidden'; el.dataset.tk = tk; el.innerHTML = '<video autoplay playsinline muted></video><img class="hidden" alt=""><span></span>'; box.insertBefore(el, $('#jtSelf')); }
-    const g = G.get(tk); el.querySelector('span').textContent = g ? g.name : ''; if (g) el.style.setProperty('--c', g.color);
+    if (!el) { el = document.createElement('div'); el.className = 'jt-vid hidden'; el.dataset.tk = tk; el.innerHTML = '<video autoplay playsinline muted></video><img class="hidden" alt=""><span></span><button class="jt-rotate" aria-label="Rotate this camera">↻</button>'; box.insertBefore(el, $('#jtSelf')); }
+    const g=G.get(tk),key='remote:'+(g?.name||'family');const update=()=>el.querySelectorAll('video,img').forEach(v=>applyCameraTurn(v,(g?.rotation||0)+readCameraTurn(key)));update();el.querySelector('button').onclick=()=>{saveCameraTurn(key,readCameraTurn(key)+90);update();}; el.querySelector('span').textContent = g ? g.name : ''; if (g) el.style.setProperty('--c', g.color);
     return el;
   }
   function video(tk, track) {
@@ -286,7 +288,7 @@ export function mountTogether(o) {
     const c = canvas(), r = c ? c.getBoundingClientRect() : { width: 16, height: 9 };
     return {
       ...s,
-      kid: kid.name, goal: String(s.goal || '').slice(0, 300), screen: String(s.screen || '').slice(0, 400), tip: String(s.tip || '').slice(0, 300),
+      camTurn:ownTurn,kid: kid.name, goal: String(s.goal || '').slice(0, 300), screen: String(s.screen || '').slice(0, 400), tip: String(s.tip || '').slice(0, 300),
       level: String(s.level || '').slice(0, 80), ar: Math.round(r.width / Math.max(1, r.height) * 1000) / 1000,
       helps: (o.helps || []).map(h => [h.id, h.icon || '✨', h.label || h.id]), features: F, world,
       view: view && view.ch ? { ch: view.ch, css: String(view.css || '') } : null,
@@ -338,6 +340,6 @@ export function mountTogether(o) {
 
 function css() {
   if (document.querySelector('link[data-together]')) return;
-  const ln = document.createElement('link'); ln.rel = 'stylesheet'; ln.href = '/games/_play/together.css?v=2'; ln.dataset.together = '1';
+  const ln = document.createElement('link'); ln.rel = 'stylesheet'; ln.href = '/games/_play/together.css?v=3'; ln.dataset.together = '1';
   document.head.appendChild(ln);
 }

@@ -6,7 +6,7 @@ const normalizeRoute = v => { const length = Math.hypot(...v) || 1; return v.map
 export class BoardRenderer {
   constructor(canvas) {
     this.canvas = canvas; this.ctx = canvas.getContext('2d');
-    this.angle = 0; this.zoom = 1; this.visual = null; this.dirty = true;
+    this.angle = 0; this.zoom = 1;this.follow=null; this.visual = null; this.dirty = true;
     try { this.scene = new BoardScene(); this.backend = 'webgl'; this.build(); }
     catch { this.scene = null; this.backend = 'canvas'; }
     this.portraits = new Map();
@@ -33,27 +33,20 @@ export class BoardRenderer {
       m.roundedBox(x, .245, z, .83, .12, .83, .085, '#fff4df');
       m.roundedBox(x, .31, z + .33, .59, .018, .045, .02, COLORS[(n - 1) % 6]);
     }
-    // Candy trees and soft cloud clusters surround the board.
-    for (let i = 0; i < 12; i++) {
-      const x = i < 6 ? -5.95 : 5.95, z = (i % 6) * 1.22 - 3.05;
-      m.cylinder(x, .21, z, .045, .7, '#ead8b2', 1);
-      m.ellipsoid(x, .7, z, .25, .28, .14, '#fff0d7', 1);
-      const spiral = Array.from({ length: 43 }, (_, j) => { const a = j / 42 * Math.PI * 5, r = .015 + j / 42 * .22; return [x + Math.cos(a) * r, .7 + Math.sin(a) * r, z + .13]; });
-      m.tube(spiral, .025, COLORS[i % 6], 1, 6);
-      m.roundedBox(x, -.02, z, .52, .12, .5, .14, '#f1d6b2');
-    }
+    // Evergreen groves and stone markers on a neutral wooden expedition board.
+    for(let i=0;i<12;i++){const x=i<6?-5.95:5.95,z=(i%6)*1.22-3.05;m.cylinder(x,.2,z,.06,.55,'#8a6949',2);m.cone(x,.62,z,.3,.65,i%2?'#527d68':'#6a8e58');m.cone(x,.94,z,.22,.55,'#416953');m.ellipsoid(x+.25,.1,z+.22,.17,.13,.2,'#909887');}
     // Castle at the finish, behind the last row.
     const castle = tilePoint(60);
-    m.roundedBox(castle.x, .48, -3.91, 1.35, 1.15, .7, .13, '#b4a3d4');
+    m.roundedBox(castle.x, .48, -3.91, 1.35, 1.15, .7, .13, '#82978a');
     for (const side of [-1, 1]) {
-      m.cylinder(castle.x + side * .65, .65, -3.91, .23, 1.5, '#f1c8a2', 1);
-      m.cone(castle.x + side * .65, 1.62, -3.91, .34, .65, '#b46e95');
-      m.roundedBox(castle.x + side * .65, .72, -3.67, .13, .25, .035, .04, '#725b80');
+      m.cylinder(castle.x + side * .65, .65, -3.91, .23, 1.5, '#c7b790', 1);
+      m.cone(castle.x + side * .65, 1.62, -3.91, .34, .65, '#486f87');
+      m.roundedBox(castle.x + side * .65, .72, -3.67, .13, .25, .035, .04, '#40564f');
       m.cylinder(castle.x + side * .65, 2.03, -3.91, .018, .25, '#d2aa58', 1);
       m.ellipsoid(castle.x + side * .65, 2.17, -3.91, .045, .045, .045, '#ddbc67', 1);
     }
-    m.roundedBox(castle.x, .34, -3.54, .38, .68, .045, .13, '#6c5172');
-    for (let i = 0; i < 4; i++) m.roundedBox(castle.x - .48 + i * .32, 1.12, -3.91, .19, .25, .7, .035, '#cabce1');
+    m.roundedBox(castle.x, .34, -3.54, .38, .68, .045, .13, '#40564f');
+    for (let i = 0; i < 4; i++) m.roundedBox(castle.x - .48 + i * .32, 1.12, -3.91, .19, .25, .7, .035, '#a3b1a1');
     for (const link of LINKS) this.buildRoute(m, link);
     // Molded dice sit in a recessed tray beside the track.
     m.roundedBox(5.92, .02, 3.55, .95, .13, .85, .13, '#694937', 2);
@@ -71,18 +64,18 @@ export class BoardRenderer {
       for (let i = 0; i <= steps; i++) { m.tube([point(i / steps, -.17), point(i / steps, .17)], .032, COLORS[i % 6]); }
     } else {
       // A solid, concave slide bed with raised glossy safety rails.
-      const col = [231 / 255, 137 / 255, 165 / 255];
+      const col = [.65,.43,.25];
       for (let i = 0; i < 35; i++) for (let j = 0; j < 6; j++) {
         const vertices = [[i,j],[i+1,j],[i+1,j+1],[i,j],[i+1,j+1],[i,j+1]];
         for (const [step, side] of vertices) { const u = (side / 6 - .5) * .34, p = point(step / 35, u); p[1] += .09 * Math.pow(u / .17, 2); m.vertex(p, normalizeRoute([nx * -u, 1, nz * -u]), col, 1); }
       }
-      for (const side of [-1, 1]) m.tube(Array.from({ length: 36 }, (_, i) => { const p = point(i / 35, side * .19); p[1] += .11; return p; }), .025, '#f3bec7');
+      for (const side of [-1, 1]) m.tube(Array.from({ length: 36 }, (_, i) => { const p = point(i / 35, side * .19); p[1] += .11; return p; }), .025, '#cfa96b');
       for (const t of [0, .45]) { const p = point(t); m.cylinder(p[0], (.3 + p[1]) / 2, p[2], .045, p[1] - .3, '#ddbd8b', 1); }
     }
   }
   character(m, player, index, active, time) {
     const c = CHARACTERS[player.character], point = this.position(player, index);
-    m.transform(point.x, .3, point.z, this.viewAngle || 0, .68);
+    m.transform(point.x, .3+(point.lift||0), point.z, this.viewAngle || 0, .68);
     m.cylinder(0, .02, 0, .35, .06, player.shirt, .15);
     const bounce = active ? Math.sin(time * 2) * .025 : 0;
     const y = c.wheelchair ? -.15 : 0;
@@ -125,7 +118,7 @@ export class BoardRenderer {
   }
   project(x, y, z) {
     if (this.scene) return this.scene.project(x, y, z, this.w, this.h);
-    const scale = Math.min(this.w / 13.5, this.h / 7.5) * this.zoom;
+    const blend=this.follow?.amount||0;const scale = Math.min(this.w / 13.5, this.h / 7.5) * this.zoom*(1+blend*.55);x-=(this.follow?.x||0)*blend;z-=(this.follow?.z||0)*blend;
     return { x: this.w / 2 + (x - z * .35) * scale, y: this.h * .53 + (z * .68 - y) * scale };
   }
   draw(match, time = 0) {
@@ -169,9 +162,9 @@ export class BoardRenderer {
         });
         if (fits) high = d; else low = d;
       }
-      const distance = high / this.zoom;
-      const eye = [Math.sin(viewAngle) * distance, distance * elevation, Math.cos(viewAngle) * distance * .76];
-      ctx.drawImage(this.scene.render({ eye, target: [0, 0, -.1], mesh, fov: .9, labelAngle: portraitView ? Math.PI / 2 : 0 }), 0, 0, w, h);
+      const follow=this.follow,blend=follow?.amount||0,target=[(follow?.x||0)*blend,0,-.1+((follow?.z||0)+.1)*blend];const distance=high/(this.zoom*(1+blend*.55));
+      const eye = [target[0]+Math.sin(viewAngle)*distance,distance*elevation,target[2]+Math.cos(viewAngle)*distance*.76];
+      ctx.drawImage(this.scene.render({ eye, target, mesh, fov: .9, labelAngle: portraitView ? Math.PI / 2 : 0 }), 0, 0, w, h);
     } else this.fallbackBoard(ctx);
     // Project the board's labels and routes into the same 3D camera.
     if (!this.scene) for (const link of LINKS) this.route(ctx, link);
@@ -199,7 +192,7 @@ export class BoardRenderer {
     if (link.kind === 'slide') {
       const mx = (A.x + B.x) / 2 + 14;
       ctx.strokeStyle = '#fff6df'; ctx.lineWidth = 12; ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.bezierCurveTo(mx, A.y, mx, B.y, B.x, B.y); ctx.stroke();
-      ctx.strokeStyle = '#e989a4'; ctx.lineWidth = 7; ctx.stroke();
+      ctx.strokeStyle = '#a87442'; ctx.lineWidth = 7; ctx.stroke();
     } else {
       const dx = B.x - A.x, dy = B.y - A.y, len = Math.hypot(dx, dy), nx = -dy / len * 4, ny = dx / len * 4;
       ctx.strokeStyle = '#5a8d87'; ctx.lineWidth = 3;

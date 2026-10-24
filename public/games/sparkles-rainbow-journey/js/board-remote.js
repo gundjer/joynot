@@ -1,5 +1,7 @@
+import {mountHintPanel} from './hint-panel.js';
 import { CHARACTERS, SHIRTS, portrait, controllerTag, shirtPicker } from './board.js';
 import { BoardRenderer } from './board-render.js';
+import {sampleMotion} from './board-motion.js';
 
 // Mounted only in Candy Cloud Trail's PIN-protected Grown-Ups helper page.
 export function mountBoardRemote({ parent, me, send }) {
@@ -35,32 +37,41 @@ export function mountBoardRemote({ parent, me, send }) {
     #boardRemote.br-playing form{grid-column:2;grid-row:1;display:flex;align-items:end;gap:8px}#boardRemote.br-playing form label{flex:1;min-width:0;font-size:10px}
     #boardRemote.br-playing input{min-width:0;padding:8px;margin:2px 0 0;min-height:40px}#boardRemote.br-playing .br-action{padding:8px 12px;min-height:36px;font-size:12px;margin:3px 0}
     #boardRemote.br-playing .br-hint{grid-column:2;grid-row:2;justify-self:start}#boardRemote.br-playing .br-feedback{grid-column:2;grid-row:3;font-size:11px;margin:0}
-    #boardRemote.br-playing .br-note{grid-column:1/-1;max-height:70px;overflow:auto;font-size:12px;margin:2px 0}
+    #boardRemote.br-playing .br-note{grid-column:1/-1;max-height:none;overflow:visible;font-size:12px;margin:2px 0}
     #boardRemote.br-playing .br-die{display:inline-block;font-size:42px;vertical-align:middle;margin-right:18px}
     @media(max-width:720px){#boardRemote.br-playing .br-quiz{grid-template-columns:1fr}#boardRemote.br-playing .br-question{grid-column:1;grid-row:1;font-size:20px;max-height:75px;padding:7px}#boardRemote.br-playing form{grid-column:1;grid-row:2}#boardRemote.br-playing .br-hint{grid-column:1;grid-row:3}#boardRemote.br-playing .br-feedback{grid-column:1;grid-row:4}#guard.candy-family #boardRemote.br-playing{height:calc(100dvh - 85px)}}
+    #boardRemote .br-question-modal{position:fixed;inset:0;z-index:1000;background:#183c34bc;display:grid;place-items:center;padding:15px}#boardRemote .br-question-content{background:#fff8e8;max-width:580px;width:100%;border-radius:20px;padding:24px;max-height:90dvh;overflow:auto}#boardRemote .br-question-modal .br-quiz{display:block}#boardRemote .br-question-modal .br-question{font-size:25px;max-height:none}#boardRemote.br-playing .br-play{position:absolute;bottom:8px;right:12px}#boardRemote.br-playing{position:relative}#boardRemote.br-playing>.br-status{position:absolute;bottom:10px;left:12px;right:160px;background:#fff7e6df;border-radius:10px;padding:8px}#boardRemote.br-playing .br-seat,#boardRemote.br-playing .br-die{display:none}#boardRemote.br-playing .br-roll{background:#fef6e4;border:2px solid #8fa68a;color:#294d42;padding:15px;font-size:18px}#boardRemote.br-playing>h2{font-size:16px}#boardRemote .br-question-modal .br-close{border:0;background:none;color:#315b4b;font:inherit;cursor:pointer}
+    #boardRemote.br-playing>.br-status{width:auto;max-width:none;right:160px}#boardRemote.br-playing .br-roll{max-width:145px;white-space:normal;font-size:14px}
+    #boardRemote .br-question-modal form{display:flex;flex-wrap:wrap;gap:8px}#boardRemote .br-question-modal form label{flex:1;min-width:150px}#boardRemote .br-question-modal .br-action{font-size:15px;min-height:44px}
+    #boardRemote .br-roll{position:relative;overflow:visible}
+    #boardRemote .br-roll.dice-prompt::before{content:'';position:absolute;bottom:calc(100% + 9px);left:50%;margin-left:-20px;width:40px;height:52px;background:#ffda29;clip-path:polygon(29% 0,71% 0,71% 54%,100% 54%,50% 100%,0 54%,29% 54%);filter:drop-shadow(0 2px 2px #46370080);pointer-events:none;animation:familyDieArrow .85s ease-in-out infinite}
+    @keyframes familyDieArrow{0%,100%{transform:translateY(-9px)}50%{transform:translateY(0)}}
+    @media(prefers-reduced-motion:reduce){#boardRemote .br-roll.dice-prompt::before{animation:none}}
   </style><small>YOUR FAMILY TABLE</small><h2>Candy Cloud Trail</h2><canvas aria-label="3D board. Drag to rotate."></canvas>
   <p class="br-status" role="status" aria-live="polite"></p>
   <div class="br-join"><p>Choose your traveler and shirt color, then claim a reserved family seat.</p><div class="br-characters">${CHARACTERS.map((c, i) => `<button type="button" class="br-character" data-character="${i}" aria-pressed="${i === 0}">${portrait(i, '#287ed6')}<span>${c.name}</span></button>`).join('')}</div><p>Shirt color</p><div class="br-colors"></div><button class="br-action br-join-button" type="button">Join a family seat →</button></div>
-  <div class="br-play" hidden><p class="br-seat"></p><div class="br-quiz"><p class="br-question"></p><form><label>Type your answer<input maxlength="200" autocomplete="off" enterkeyhint="done" aria-label="Your answer"></label><button class="br-action br-check" type="submit">Check answer ✓</button></form><button type="button" class="br-action br-hint">Need a hint?</button><p class="br-feedback"></p><p class="br-note" hidden></p></div><div class="br-die"></div><button type="button" class="br-action br-roll" hidden>Roll the die</button><button type="button" class="br-action br-next" hidden>Next player →</button></div>`;
+  <div class="br-play" hidden><p class="br-seat"></p><div class="br-quiz"><p class="br-question"></p><form><label>Type your answer<input maxlength="200" autocomplete="off" enterkeyhint="done" aria-label="Your answer"></label><button class="br-action br-check" type="submit">Check answer ✓</button></form><button type="button" class="br-action br-hint">Need a hint?</button><p class="br-feedback"></p><div class="br-note" hidden></div></div><div class="br-die"></div><button type="button" class="br-action br-roll" hidden>Roll the die</button><button type="button" class="br-action br-next" hidden>Next player →</button></div>`;
   parent.prepend(root);
   document.getElementById('guard')?.classList.add('candy-family');
   const $ = selector => root.querySelector(selector);
   const renderer = new BoardRenderer($('canvas'));
-  let state, selected = 0, selectedShirt = SHIRTS[0], lastKey, lastFeedback, pending = false, joinRequested = false;
-  function frame() { if (!root.isConnected) return; requestAnimationFrame(frame); if (state && renderer.dirty) renderer.draw({ players: state.seats, turn: state.turn }, performance.now() / 1000); }
+  let receivedAt=0;let state, selected = 0, selectedShirt = SHIRTS[0], lastKey, lastFeedback,lastOpen, pending = false, joinRequested = false;
+  function frame(now){if(!root.isConnected)return;requestAnimationFrame(frame);if(state?.motion&&state.phase==='moving'){const sample=sampleMotion(state.motion,state.motion.elapsed+now-receivedAt);renderer.visual={index:state.motion.index,...sample};renderer.follow={x:sample.x,z:sample.z,amount:sample.zoom};renderer.dieRolling=sample.dieRolling;renderer.dirty=true;}if(state&&renderer.dirty)renderer.draw({players:state.seats,turn:state.turn,die:state.die},now/1000);}
   requestAnimationFrame(frame);
   function action(name, value) {
     if (!state) return;
     send({ t: 'board', action: name, key: state.key, value, character: selected, shirt: selectedShirt });
-    if (name !== 'hint' && name !== 'join') { pending = true; buttons(); }
+    if (name !== 'hint' && name !== 'hint-step' && name !== 'join') { pending = true; buttons(); }
   }
+  const hintPanel=mountHintPanel($('.br-note'),(value,revision)=>action('hint-step',{value,revision}));
   function owned() { return state?.seats.findIndex(p => p.remote && p.controller === controllerTag(me.token)) ?? -1; }
   function buttons() {
     const index = owned(), active = index >= 0 && index === state?.turn && !state.lobby;
     $('.br-check').disabled = !active || pending || state.phase !== 'question';
     $('input').disabled = !active || state.phase !== 'question';
     $('.br-hint').disabled = !active || state.phase !== 'question';
-    $('.br-roll').disabled = !active || pending; $('.br-next').disabled = !active || pending;
+    $('.br-roll').classList.toggle('dice-prompt',active&&!pending&&!state.questionOpen&&['question','ready'].includes(state.phase));
+    $('.br-roll').disabled = !active || pending||!['question','ready'].includes(state.phase); $('.br-next').disabled = !active || pending;
   }
   root.addEventListener('click', e => {
     const color = e.target.closest('[data-shirt]');
@@ -78,32 +89,34 @@ export function mountBoardRemote({ parent, me, send }) {
   }
   $('.br-join-button').onclick = () => { joinRequested = true; action('join'); };
   $('form').onsubmit = e => { e.preventDefault(); if (!$('.br-check').disabled && $('input').value.trim()) action('answer', $('input').value); };
-  $('.br-hint').onclick = () => action('hint'); $('.br-roll').onclick = () => action('roll'); $('.br-next').onclick = () => action('next');
+  $('.br-hint').onclick = () => action('hint'); $('.br-roll').onclick = () => action(state.phase==='question'?'open':'roll'); $('.br-next').onclick = () => action('next');
+  const popup=document.createElement('div');popup.className='br-question-modal';popup.hidden=true;popup.setAttribute('role','dialog');popup.setAttribute('aria-modal','true');popup.setAttribute('aria-label','Your roll challenge');popup.innerHTML='<div class="br-question-content"><button class="br-close">← Back to board</button><h2>Earn your move</h2></div>';root.appendChild(popup);popup.firstElementChild.appendChild($('.br-quiz'));$('.br-close').onclick=()=>action('close');
+  root.addEventListener('keydown',e=>{if(popup.hidden)return;if(e.key==='Escape'){e.preventDefault();action('close');}if(e.key==='Tab'){const items=[...popup.querySelectorAll('button:not(:disabled),input:not(:disabled)')].filter(el=>!el.closest('[hidden]')),first=items[0],last=items.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}});
   return {
     update(next) {
       if (!next || !Array.isArray(next.seats)) return;
-      state = next;
+      state=next;receivedAt=performance.now();if(!next.motion){renderer.visual=null;renderer.follow=null;renderer.dieRolling=false;}
       root.classList.toggle('br-playing', !next.lobby);
       const index = owned(), player = next.seats[next.turn];
       if (index >= 0) { selectedShirt = next.seats[index].shirt; selected = next.seats[index].character; root.querySelectorAll('[data-character]').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.character) === selected))); }
       else if (next.seats.some(p => p.shirt === selectedShirt)) selectedShirt = SHIRTS.find(c => !next.seats.some(p => p.shirt === c)) || SHIRTS[0];
       drawColors();
-      if (lastKey !== next.key || lastFeedback !== next.feedback) { pending = false; if (lastKey !== next.key) $('input').value = ''; }
-      lastKey = next.key; lastFeedback = next.feedback;
+      if (lastKey !== next.key || lastFeedback !== next.feedback||state.questionOpen!==lastOpen) { pending = false; if (lastKey !== next.key) $('input').value = ''; }
+      lastKey = next.key; lastFeedback = next.feedback;lastOpen=next.questionOpen;
       $('.br-join').hidden = !next.lobby && index >= 0;
       $('.br-join-button').textContent = index >= 0 ? '✓ Seat claimed · update character' : next.lobby ? 'Join a family seat →' : 'Reconnect my family seat';
       $('.br-join-button').disabled = next.lobby && index < 0 && !next.seats.some(p => p.remote && !p.controller);
       $('.br-play').hidden = next.lobby;
       $('.br-seat').textContent = index < 0 ? 'Watching the table. Ask the host to reserve a family seat before starting.' : `You’re playing as ${next.seats[index].name}. ${next.turn === index ? 'It’s your turn!' : `Waiting for ${player?.name}.`}`;
       $('.br-status').textContent = next.lobby ? (index >= 0 ? 'Your seat is ready. The host can start when everyone has joined.' : 'Waiting at the family table.') : next.message;
-      $('.br-quiz').hidden = next.phase !== 'question'; $('.br-question').textContent = next.question;
+      const wasHidden=popup.hidden;popup.hidden=!(next.phase==='question'&&next.questionOpen&&index===next.turn);$('.br-quiz').hidden=false; $('.br-question').textContent = next.question;
       $('input').inputMode = /Read aloud:/.test(next.question) ? 'text' : 'decimal';
       $('.br-feedback').textContent = next.feedback;
-      $('.br-note').textContent = next.hint; $('.br-note').hidden = !next.hint;
+      hintPanel.update(next.guide);$('.br-note').hidden=!next.guide;
       $('.br-die').textContent = next.die ? ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'][next.die - 1] : '';
-      $('.br-roll').hidden = next.phase !== 'ready'; $('.br-next').hidden = !['result', 'finished'].includes(next.phase);
+      $('.br-roll').hidden=false;$('.br-roll').textContent=index===next.turn?'⚄ Tap the die':'⚄ '+(player?.name||'Player')+'’s turn';$('.br-next').hidden=true;
       $('.br-next').textContent = next.phase === 'finished' ? 'Celebrate the winner ★' : 'Next player →';
-      buttons(); renderer.draw({ players: next.seats, turn: next.turn }, performance.now() / 1000);
+      buttons();if(wasHidden&&!popup.hidden)$('input').focus(); renderer.draw({ players: next.seats, turn: next.turn, die: next.die }, performance.now() / 1000);
       // The family device renders the actual board locally, so no video feed is required.
       const stage = document.getElementById('stage'); if (stage) stage.classList.add('hidden');
     },

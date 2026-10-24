@@ -75,7 +75,7 @@ body { -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user
 #screen { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; touch-action: none; background: #0d0a1e; }
 #mirror { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; pointer-events: none; background: transparent; z-index: 1; }
 .kidcam { position: absolute; right: 10px; top: 10px; width: 120px; height: 120px; border-radius: 50%; overflow: hidden; border: 4px solid #2fae66; background: #222; z-index: 3; box-shadow: 0 4px 14px rgba(0,0,0,.35); }
-.kidcam video, .kidcam img { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+.kidcam video, .kidcam img { width: 100%; height: 100%; object-fit: cover; }
 .kidcam span { position: absolute; left: 50%; bottom: 4px; transform: translateX(-50%); background: #2fae66; color: #fff; font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
 .answer { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); z-index: 3; background: rgba(43,35,80,.92); color: #fff; padding: 6px 12px; border-radius: 999px; font-size: 14px; pointer-events: none; white-space: nowrap; }
 .answer b { color: #ffd34d; }
@@ -86,3 +86,5 @@ body { -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user
 /* your own camera sits on the picture, next to the kid's camera */
 .stage .selfcam { position: absolute; top: 10px; right: 142px; z-index: 3; }
 @media (max-width: 480px) { .stage .selfcam { right: 104px; width: 72px; height: 54px; } }
+
+.kidcam video,.kidcam img{transform:none;image-orientation:from-image}

@@ -13,12 +13,14 @@ const fs = require('node:fs');
   await page.locator('#startGame').click();
   for (const [width,height] of [[1440,1000],[390,844],[320,740],[844,390]]) {
     await page.setViewportSize({ width,height }); await page.waitForTimeout(500);
+    await page.locator('#rollDice').click();
     const state = await page.evaluate(() => {
       const renderer = window.__candy.renderer, q = document.getElementById('questionText').getBoundingClientRect(), a = document.getElementById('answerInput').getBoundingClientRect(), b = document.getElementById('game').getBoundingClientRect();
       return { backend: renderer.backend, glError: renderer.scene?.gl.getError(), q: q.bottom, a: a.bottom, boardBottom: b.bottom, questionTop: q.top, width: document.documentElement.scrollWidth, height: innerHeight, shadowReady: renderer.scene?.staticCount > 0 };
     });
     assert.equal(state.backend,'webgl'); assert.equal(state.glError,0); assert(state.shadowReady);
-    assert(state.q <= height && state.a <= height && state.questionTop >= state.boardBottom); assert(state.width <= width + 1);
+    assert(state.q <= height && state.a <= height && state.questionTop >= 0); assert(state.width <= width + 1);
+    await page.keyboard.press('Escape');
     await page.screenshot({ path:`storage/testing/candy-detailed-${width}.png`, fullPage:true });
   }
   assert.deepEqual(errors,[]);

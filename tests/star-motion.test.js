@@ -1,0 +1,6 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {motionAt,moveDuration,launchAt,LAUNCH_MS} from '../public/games/star-academy/race-motion.js';
+import {newRace,finishMove,finishLaunch,restoreRace,publicRace} from '../public/games/star-academy/race.js';
+test('moves step slowly forward and backward with a camera that settles before next turn',()=>{for(const [from,to] of [[0,6],[21,16]]){const move={from,to,duration:moveDuration(from,to)};assert.equal(move.duration,1400+Math.abs(to-from)*1100);assert.equal(motionAt(move,0).a,from);assert(motionAt(move,1500).follow>.9);assert.equal(motionAt(move,move.duration).a,to);assert.equal(motionAt(move,move.duration).follow,0);assert.equal(motionAt(move,1500,true).follow,0);}});
+test('rocket counts down, lifts off, resumes, and finishes only after launch',()=>{const s=newRace([{name:'Kid',owner:'local'}]);s.players[0].pos=48;s.phase='moving';s.move={from:47,to:48,duration:2500};finishMove(s);assert.equal(s.phase,'launch');s.launch.elapsed=3000;assert(restoreRace(s));assert.equal(publicRace(s,0,3000).launch.elapsed,3000);assert.equal(launchAt(0).count,3);assert.equal(launchAt(2100).count,0);assert(launchAt(5000).height>5);assert.equal(launchAt(5000,true).height,0);assert(launchAt(LAUNCH_MS).done);finishLaunch(s);assert.equal(s.phase,'finished');assert.equal(finishLaunch(s),false);});

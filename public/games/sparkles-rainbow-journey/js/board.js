@@ -1,8 +1,8 @@
 // Serializable rules shared by the renderer and turn controls. No DOM or timers.
 export const FINISH = 60;
-export const COLORS = ['#f879a1', '#ffb75e', '#f7d65a', '#66cba8', '#69bdf3', '#ad96ed'];
-export const SHIRTS = ['#e54d86', '#287ed6', '#168c78', '#d47a18', '#8654cc', '#bd4740', '#b79a18', '#354b7c', '#669c32', '#555963'];
-export const SHIRT_NAMES = ['Pink', 'Blue', 'Teal', 'Orange', 'Purple', 'Red', 'Gold', 'Navy', 'Green', 'Gray'];
+export const COLORS = ['#548779', '#c9924b', '#d5ba61', '#497d9b', '#6c8d59', '#7b8491'];
+export const SHIRTS = ['#287ed6', '#168c78', '#d47a18', '#e54d86', '#8654cc', '#bd4740', '#b79a18', '#354b7c', '#669c32', '#555963'];
+export const SHIRT_NAMES = ['Blue', 'Teal', 'Orange', 'Pink', 'Purple', 'Red', 'Gold', 'Navy', 'Green', 'Gray'];
 export function assignShirts(seats) {
   const used = new Set();
   const colors = seats.map(p => { if (SHIRTS.includes(p.shirt) && !used.has(p.shirt)) { used.add(p.shirt); return p.shirt; } return null; });
@@ -28,7 +28,7 @@ export const LINKS = [
   { from: 47, to: 35, kind: 'slide' }, { from: 57, to: 45, kind: 'slide' },
 ];
 export const CANDY = [9, 22, 36, 48];
-export const LAND_NAMES = ['Strawberry Start', 'Peachy Paths', 'Lemon Drop Lane', 'Mint Meadow', 'Blueberry Bay', 'Lavender Castle'];
+export const LAND_NAMES = ['Trailhead', 'Pine Grove', 'Sunstone Ridge', 'River Bend', 'Bluewater Pass', 'Summit Lookout'];
 // Public seat label derived from a random token; bearer tokens stay on the host.
 // This label is for UI only. The host always checks the actual transport sender.
 export function controllerTag(token) {
@@ -84,7 +84,7 @@ export function roll(match, random = Math.random) {
     const colorIndex = Math.min(5, Math.max(0, Math.floor(random() * 6)));
     const next = Array.from({ length: FINISH - landing }, (_, i) => landing + i + 1).find(n => (n - 1) % 6 === colorIndex);
     color = COLORS[colorIndex]; kind = 'candy'; to = next || landing;
-    message += next ? ` Candy card! Follow the matching color to ${to}.` : ' Candy card! Enjoy a sweet rest here.';
+    message += next ? ` Trail card! Follow the matching color to ${to}.` : ' Candy card! Enjoy a sweet rest here.';
   }
   player.pos = to; match.die = die;
   match.move = { from, landing, to, kind, color, message };

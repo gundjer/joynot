@@ -1,3 +1,4 @@
+import {mountSpaceRemote} from '../star-academy/remote.js';
 // JoyNot "Play together", grown-up's phone — every game except Bee Smart (which has Guard Bee).
 // Opened from the "Join" card on the Grown-ups pages. Shows the kid's game LIVE — the same screen the kid sees — and,
 // when a problem pops up, the same problem card on top (games that share it, like Rusty's After Hours), and you hear
@@ -5,12 +6,15 @@
 // answer) and the game's own help buttons. With Talk & Chat on: hold-to-talk and chat. With Video on: a video call —
 // your camera in a bubble on the kid's screen, and the kid's camera here.
 import { CoopLink } from './coop-link.js';
+import {cameraTurn,readCameraTurn,saveCameraTurn,applyCameraTurn} from './camera-view.js';
 import { talker, voicePlayer, playClip, sendChat, canTalk } from './coop-voice.js';
 import { tune, clean } from '/js/joynot-voice.js';
 import { mountBoardRemote } from '../sparkles-rainbow-journey/js/board-remote.js';
 import { mountGarageRemote } from '../gizmo-garage/remote.js';
 
 const C = window.COOP || {};
+let spaceRemote = null;
+let academyRemote = null,academyLoading=null,academyEpoch=0;
 let boardRemote = null;
 let garageRemote = null;
 const $ = s => document.querySelector(s);
@@ -23,7 +27,7 @@ const store = {
   sget(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } }, sset(k, v) { try { sessionStorage.setItem(k, v); } catch (e) {} },
 };
 
-let F = { talk: false, video: false, ...(C.features || {}) }, me = null, link = null, talk = null, cam = null, st = null, net = 'connecting';
+let ownTurn=readCameraTurn('self'),kidTurn=0;let F = { talk: false, video: false, ...(C.features || {}) }, me = null, link = null, talk = null, cam = null, st = null, net = 'connecting';
 let unread = 0, sheetOpen = false, toastT = 0, lastFrameAt = 0, helpsKey = '', screenLive = false, mirrorKey = '', kidCamLive = false;
 let hear = store.get('joynot_hear_game') !== 'off', camRelayT = 0, frameWatchT = 0, camOpening = false;
 const cool = {}, parts = new Map(), player = voicePlayer(), seenChat = new Set(), chatLog = [];
@@ -69,6 +73,8 @@ async function join(name) {
 
 // ------------------------------------------------ playing
 function play() {
+  spaceRemote?.destroy();spaceRemote=null;
+  academyRemote?.destroy();academyRemote=null;academyLoading=null;academyEpoch++;
   garageRemote?.destroy(); garageRemote = null;
   boardRemote = null;
   screenLive = false; kidCamLive = false; lastFrameAt = 0; helpsKey = ''; mirrorKey = '';
@@ -129,7 +135,7 @@ function play() {
       else if (tag === 'screen') screenVideo(track);
       else if (tag === 'cam') kidCam(track);
     },
-    onLink: (tk, open) => { net = open ? 'direct' : 'relay'; netPill(); if (open && cam) link.send('host', { t: 'cam', on: true }); if (!open) { kidCamLive = false; screenOff(); } },
+    onLink: (tk, open) => { net = open ? 'direct' : 'relay'; netPill(); if (open && cam) link.send('host', { t: 'cam', on: true,rotation:ownTurn }); if (!open) { kidCamLive = false; screenOff(); } },
     onEnded: () => { clearInterval(camRelayT); clearInterval(frameWatchT); stopCam(); if (talk) talk.stop(); player.drop('host'); endedScreen(`${KID.name} stopped playing. Thanks for playing together!`); },
   });
   window.__joynotLink = link; // tests
@@ -140,7 +146,7 @@ function play() {
   addEventListener('pagehide', () => link && link.end());
   frameWatchT = setInterval(() => { if (net !== 'connecting' && lastFrameAt && !screenLive && performance.now() - lastFrameAt > 8000) $('#wait')?.classList.remove('hidden'); }, 2000);
   // camera through JoyNot when there's no direct link: a small picture about every 1.5 seconds
-  camRelayT = setInterval(() => { if (cam && link && !link.linkOpen('host') && F.video) { const d = camShot(); if (d) link.send('host', { t: 'camf', d }); } }, 1500);
+  camRelayT = setInterval(() => { if (cam && link && !link.linkOpen('host') && F.video) { const d = camShot(); if (d) link.send('host', { t: 'camf', d,rotation:ownTurn }); } }, 1500);
   addEventListener('pointerdown', () => { [$('#screen'), $('#kidcam video')].forEach(v => { if (v && v.paused && v.srcObject) v.play().catch(() => {}); }); }, { capture: true });
 }
 function netPill() { const el = $('#net'); if (!el) return; el.textContent = net === 'direct' ? '⚡ Direct' : net === 'relay' ? '☁️ Online' : '⏳ Connecting'; }
@@ -161,7 +167,12 @@ function act(k, extra, msg, cd) {
 }
 function onState(s) {
   if (!s || typeof s !== 'object') return;
-  st = s;
+  st=s;kidTurn=cameraTurn(s.camTurn??kidTurn);$('#kidcam')?.querySelectorAll('video,img').forEach(v=>applyCameraTurn(v,kidTurn));
+  if(C.game==='robo-brain'&&s.academy){
+    if(academyRemote)academyRemote.update(s.academy);
+    else if(!academyLoading){const epoch=academyEpoch;academyLoading=import('../robo-brain/academy/remote.js').then(({mountAcademyRemote})=>{if(epoch!==academyEpoch)return;academyRemote=mountAcademyRemote({parent:document.querySelector('.panel'),me,send:message=>link&&link.send('host',message),onQuit:()=>{academyRemote?.destroy();link?.end();location.href=C.urls.back;}});if(st?.academy)academyRemote.update(st.academy);}).catch(error=>{console.error(error);toast('The 3D academy did not load. Retrying…');}).finally(()=>{if(epoch===academyEpoch)academyLoading=null;});}
+  }
+  if(C.game==='star-academy'&&s.spaceRace){if(!spaceRemote)spaceRemote=mountSpaceRemote({parent:document.querySelector('.panel'),me,send:message=>link&&link.send('host',message),onQuit:()=>{link?.end();location.href=C.urls.back;}});spaceRemote.update(s.spaceRace);}
   if (C.game === 'gizmo-garage' && s.garage) {
     if (!garageRemote) garageRemote = mountGarageRemote({parent:document.querySelector('.panel'),me,send:message=>link&&link.send('host',message),onQuit:()=>{link?.end();location.href=C.urls.back;}});
     garageRemote.update(s.garage);
@@ -244,6 +255,7 @@ function sayHere(b) {
   } catch (e) {}
 }
 function onMsg(from, b) {
+  if(b?.t==='cam-turn'){kidTurn=cameraTurn(b.turn);$('#kidcam')?.querySelectorAll('video,img').forEach(v=>applyCameraTurn(v,kidTurn));return;}
   if (b.t === 'fr') {
     let p = parts.get(b.k); if (!p) { p = { n: b.n, got: 0, d: [] }; parts.set(b.k, p); }
     if (p.d[b.i] == null) { p.d[b.i] = b.d; p.got++; }
@@ -275,7 +287,7 @@ function renderTogether() {
   const mic = canTalk();
   box.innerHTML = `${F.talk ? `<button class="btn talk" id="talkBtn" type="button" ${mic ? '' : 'disabled'}>${mic ? '🎙️ Hold to talk' : '🎙️ Talk needs https'}</button>
     <button class="btn" id="chatBtn" type="button">💬 Chat${unread ? ` <i class="badge">${unread}</i>` : ''}</button>` : ''}
-    ${F.video ? `<button class="btn" id="camBtn" type="button">${cam ? '📹 Camera on' : '📹 Camera'}</button>` : ''}${hearBtn}`;
+    ${F.video ? `<button class="btn" id="camBtn" type="button">${cam ? '📹 Camera on' : '📹 Camera'}</button>${cam?'<button class="btn" id="rotateCam" type="button">↻ Rotate my camera</button>':''}` : ''}${hearBtn}`;
   bindHear();
   const tb = $('#talkBtn');
   if (tb && mic) {
@@ -284,6 +296,7 @@ function renderTogether() {
     tb.addEventListener('contextmenu', e => e.preventDefault());
   }
   if ($('#chatBtn')) $('#chatBtn').onclick = () => sheet(true);
+  if($('#rotateCam'))$('#rotateCam').onclick=()=>{ownTurn=cameraTurn(ownTurn+90);saveCameraTurn('self',ownTurn);applyCameraTurn($('#selfcam'),ownTurn,true);link?.send('host',{t:'cam',on:true,rotation:ownTurn});};
   if ($('#camBtn')) $('#camBtn').onclick = () => (cam ? stopCam() : startCam());
 }
 function bindHear() {
@@ -315,8 +328,8 @@ async function startCam() {
   try {
     const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 240 }, frameRate: { ideal: 15 } }, audio: false });
     if (!F.video || !link || link.stopped) { s.getTracks().forEach(t => t.stop()); return; }
-    cam = s; link.setCam(s.getVideoTracks()[0]); link.send('host', { t: 'cam', on: true });
-    const v = $('#selfcam'); v.srcObject = s; v.classList.remove('hidden'); v.play().catch(() => {});
+    cam = s; link.setCam(s.getVideoTracks()[0]); link.send('host', { t: 'cam', on: true, rotation: ownTurn });
+    const v = $('#selfcam');applyCameraTurn(v,ownTurn,true); v.srcObject = s; v.classList.remove('hidden'); v.play().catch(() => {});
     toast(`📹 Video call on: you and ${KID.name} can see each other`);
   } catch (e) { toast('📹 Please allow the camera.'); }
   finally { camOpening = false; }

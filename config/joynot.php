@@ -86,7 +86,7 @@ return [
             'skills' => ['📖 Reading', '🔢 Math'],
             'ages' => 'Ages 4–10',
             'theme' => 'rainbow',
-            'version' => env('GAME_VERSION', '1.0.0'),
+            'version' => env('GAME_VERSION', '1.0.0').'-trail-board-4',
         ],
 
         // ----- Learning mini-games (shared engine in public/games/_joy) -----
@@ -116,12 +116,12 @@ return [
         'star-academy' => [
             'class' => App\Games\StarAcademy::class,
             'title' => 'Star Academy',
-            'description' => 'Blast off with Captain Nova! Fly your ship to the Sun, planets and Moon, unlock new destinations as you level up, and type warp codes to jump through space.',
-            'cover' => '/games/star-academy/cover.jpg',
+            'description' => 'Race along a 3D galaxy spiral! Draw discovery cards, explore space together, remember the story, and reach the rocket first.',
+            'cover' => '/games/star-academy/cover.svg',
             'skills' => ['🚀 Space', '🔬 Science'],
             'ages' => 'Ages 5–11',
             'theme' => 'learn space night',
-            'version' => env('GAME_VERSION', '1.0.0'),
+            'version' => env('GAME_VERSION', '1.0.0').'-galaxy-spiral-3',
         ],
 
         'gizmo-garage' => [
@@ -137,13 +137,13 @@ return [
 
         'robo-brain' => [
             'class' => App\Games\RoboBrain::class,
-            'title' => 'Robo Brain',
-            'description' => 'Train Robo, a robot pet that really learns from how you sort, then watch it race! Debug its data, build decision trees, tune a neuron and learn to use AI wisely.',
-            'cover' => '/games/robo-brain/cover.jpg',
+            'title' => 'Robot Training Academy',
+            'description' => 'Six cooperative 3D AI adventures: teach a sorting robot, recognize rescue sounds, learn routes from rewards, recommend creature favorites, generate picture stories and investigate AI mistakes. Play with family or bot helpers.',
+            'cover' => '/games/robo-brain/academy/cover.png',
             'skills' => ['🤖 AI', '🧠 Logic'],
             'ages' => 'Ages 5–11',
             'theme' => 'learn ai night',
-            'version' => env('GAME_VERSION', '1.0.0'),
+            'version' => env('GAME_VERSION', '1.0.0').'-academy-3',
         ],
 
         'signal-squad' => [

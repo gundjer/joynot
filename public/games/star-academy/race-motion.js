@@ -1,0 +1,5 @@
+export const STEP_MS=1100,ROLL_MS=700,SETTLE_MS=700,LAUNCH_MS=6500;
+const clamp=n=>Math.max(0,Math.min(1,n)),ease=n=>n*n*(3-2*n);
+export const moveDuration=(from,to)=>ROLL_MS+Math.abs(to-from)*STEP_MS+SETTLE_MS;
+export function motionAt(move,elapsed,reduced=false){const distance=Math.abs(move.to-move.from),direction=Math.sign(move.to-move.from),walk=Math.max(1,move.duration-ROLL_MS-SETTLE_MS),progress=clamp((elapsed-ROLL_MS)/walk)*distance,step=Math.min(distance,Math.floor(progress)),fraction=step===distance?0:progress-step;return {a:move.from+direction*step,b:move.from+direction*Math.min(distance,step+1),t:ease(fraction),lift:reduced?0:Math.sin(fraction*Math.PI)*.35,follow:reduced?0:ease(clamp(elapsed/800))*ease(clamp((move.duration-elapsed)/SETTLE_MS))};}
+export function launchAt(elapsed,reduced=false){const flight=clamp((elapsed-2000)/(LAUNCH_MS-2000));return {count:elapsed<2000?Math.max(1,3-Math.floor(elapsed/700)):0,height:reduced?0:flight*flight*20,thrust:elapsed<1400?0:clamp((elapsed-1400)/600),follow:reduced?0:ease(clamp(elapsed/1200)),done:elapsed>=LAUNCH_MS};}

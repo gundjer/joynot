@@ -1,0 +1,14 @@
+{
+  "earth.jpg": "https://play.solarsystemscope.com/textures/download/2k_earth_daymap.jpg",
+  "moon.jpg": "https://play.solarsystemscope.com/textures/download/2k_moon.jpg",
+  "mars.jpg": "https://play.solarsystemscope.com/textures/download/2k_mars.jpg",
+  "saturn.jpg": "https://play.solarsystemscope.com/textures/download/2k_saturn.jpg",
+  "sun.jpg": "https://play.solarsystemscope.com/textures/download/2k_sun.jpg",
+  "galaxy.jpg": "https://play.solarsystemscope.com/textures/download/2k_stars_milky_way.jpg",
+  "saturn-rings.png": "https://play.solarsystemscope.com/textures/download/2k_saturn_ring_alpha.png",
+  "blackhole.jpg": "https://svs.gsfc.nasa.gov/vis/a010000/a013300/a013326/Black_Hole_Accretion_Disk_Sim_4k_ProRes.00386_print.jpg",
+  "asteroid.jpg": "https://assets.science.nasa.gov/content/dam/science/psd/solar/2023/09/b/bennu_dec10.jpg",
+  "comet.jpg": "https://assets.science.nasa.gov/content/dam/science/psd/solar/2023/09/2/208A3495_1280.jpg",
+  "microgravity.jpg": "https://www.nasa.gov/wp-content/uploads/2023/03/iss067e189394.jpg?w=1041",
+  "nebula.jpg": "https://spaceplace.nasa.gov/nebula/en/star-forming_region_carina.en.jpg"
+}
